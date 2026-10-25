@@ -1,1 +1,1 @@
-export { formatINR } from "./money";
+export { formatINR, formatINRCompact } from "./money";
