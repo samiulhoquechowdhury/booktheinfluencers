@@ -1,0 +1,1 @@
+export { PaiseSchema } from "./money";
