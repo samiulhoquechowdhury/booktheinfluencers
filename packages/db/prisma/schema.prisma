@@ -133,16 +133,19 @@ enum ApplicationStatus {
 // ---------- People & access ----------
 
 model User {
-  id           String    @id @default(cuid())
-  phone        String?   @unique
-  email        String?   @unique
-  name         String
-  passwordHash String? // staff only (scrypt)
-  mfaSecret    String? // staff only, encrypted at rest
-  roles        Role[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id                 String    @id @default(cuid())
+  phone              String?   @unique
+  email              String?   @unique
+  name               String
+  passwordHash       String? // staff only (scrypt)
+  mfaSecret          String? // staff only, encrypted at rest
+  roles              Role[]
+  disabledAt         DateTime? // staff: deactivated by a super admin; can't sign in
+  mustChangePassword Boolean   @default(false) // staff: signed in with a temporary password
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
 
   talent        Talent?
   leads         Lead[]            @relation("CustomerLeads")
@@ -615,4 +618,39 @@ model Notification {
 
   @@index([status, sendAfter])
   @@index([leadId])
+}
+
+/// Uploaded images (hero photos). Stored in the database so every API instance can serve them.
+model Media {
+  id        String   @id @default(cuid())
+  mime      String
+  bytes     Bytes
+  width     Int
+  height    Int
+  size      Int
+  createdAt DateTime @default(now())
+
+  heroSlides HeroSlide[]
+}
+
+/// Home page hero carousel, edited by super admins.
+model HeroSlide {
+  id        String   @id @default(cuid())
+  position  Int
+  active    Boolean  @default(true)
+  /// A bundled image path (e.g. /images/hero.jpg) when no upload is set.
+  imagePath String?
+  imageId   String?
+  imageAlt  String
+  eyebrow   String
+  title     String
+  accent    String
+  body      String
+  ctaLabel  String
+  ctaHref   String
+  updatedAt DateTime @updatedAt
+
+  image Media? @relation(fields: [imageId], references: [id], onDelete: SetNull)
+
+  @@index([active, position])
 }

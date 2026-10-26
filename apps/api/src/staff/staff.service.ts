@@ -130,7 +130,7 @@ export class StaffService {
 
   async assignOwner(user: AuthUser, leadId: string, ownerId: string) {
     this.require(user, "SALES");
-    const owner = await this.prisma.db.user.findFirst({ where: { id: ownerId, roles: { hasSome: ["SALES", "SUPER_ADMIN"] } } });
+    const owner = await this.prisma.db.user.findFirst({ where: { id: ownerId, disabledAt: null, roles: { hasSome: ["SALES", "SUPER_ADMIN"] } } });
     if (!owner) throw new DomainError("VALIDATION", "Pick a sales owner");
     await this.prisma.db.$transaction(async (tx) => {
       const lead = await tx.lead.update({ where: { id: leadId }, data: { ownerId } }).catch(() => {

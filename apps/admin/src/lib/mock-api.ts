@@ -4,7 +4,21 @@
 
 import { allowedNextStages, type LeadStage } from "@repo/utils";
 import { TALENTS } from "@repo/mock/catalogue/data";
-import { DEMO_OTP, STAFF_DEMO_PASSWORD, STAFF_USERS, internalFor, type StaffUser } from "@repo/mock/internal";
+import { internalFor, type StaffUser } from "@repo/mock/internal";
+import { createHero, deleteHero, listHero, reorderHero, updateHero, uploadMedia } from "@repo/mock/site";
+import {
+  changeStaffPassword,
+  createStaff,
+  listStaff,
+  resetStaffMfa,
+  resetStaffPassword,
+  setStaffActive,
+  staffCodeStep,
+  staffDirectory,
+  staffPasswordStep,
+  toStaffUser,
+  updateStaff,
+} from "@repo/mock/staff-accounts";
 import {
   ApiError,
   bookingsOf,
@@ -40,7 +54,7 @@ import {
 } from "@repo/mock/staff";
 import { loadDb, mutate, readStaffId, writeStaffId } from "@repo/mock/store";
 import { addRep, allTalentRecords, createTalent, setRateCard, setRepVerification, setTalentStatus, talentDetail, updateTalent } from "@repo/mock/talent-admin";
-import type { ProfileStatus, RateCardInput, RepInput, TalentInput, VerificationStatus } from "@repo/schemas";
+import type { HeroSlideInput, StaffCreateInput, StaffUpdateInput, ProfileStatus, RateCardInput, RepInput, TalentInput, VerificationStatus } from "@repo/schemas";
 import type { LeadRec, MockDb, TalentApplicationRec } from "@repo/mock/types";
 
 
@@ -52,10 +66,13 @@ async function call<T>(work: () => T): Promise<T> {
 
 function actor(): StaffUser {
   const id = readStaffId();
-  const staff = STAFF_USERS.find((s) => s.id === id);
-  if (!staff) throw new ApiError("UNAUTHENTICATED", "Please sign in");
-  return staff;
+  const account = loadDb().staffAccounts.find((a) => a.id === id && a.active);
+  if (!account) throw new ApiError("UNAUTHENTICATED", "Please sign in");
+  return toStaffUser(account);
 }
+
+export type StaffSession = StaffUser & { mustChangePassword: boolean };
+export type PasswordStep = { staffId: string; setup?: { secret: string; uri: string } };
 
 const talentOf = (slug: string) => TALENTS.find((t) => t.slug === slug);
 
@@ -121,24 +138,50 @@ export type LeadBooking = LeadDetail["bookings"][number];
 
 export const mockApi = {
   auth: {
-    session: () => call(() => STAFF_USERS.find((s) => s.id === readStaffId()) ?? null),
-    /** AUTH-2 step 1: email + password. */
-    password: (email: string, password: string) =>
-      call(() => {
-        const staff = STAFF_USERS.find((s) => s.email === email.trim().toLowerCase());
-        if (!staff || password !== STAFF_DEMO_PASSWORD) throw new ApiError("INVALID_LOGIN", "Email or password is incorrect");
-        return { staffId: staff.id };
+    session: () =>
+      call((): StaffSession | null => {
+        const account = loadDb().staffAccounts.find((a) => a.id === readStaffId() && a.active);
+        return account ? { ...toStaffUser(account), mustChangePassword: account.mustChangePassword } : null;
       }),
+    /** AUTH-2 step 1: email + password. Staff without an authenticator get a setup key. */
+    password: (email: string, password: string) => call((): PasswordStep => staffPasswordStep(loadDb(), email, password)),
     /** AUTH-2 step 2: authenticator (TOTP) code. */
     totp: (staffId: string, code: string) =>
-      call(() => {
-        if (code !== DEMO_OTP) throw new ApiError("OTP_INVALID", "That code is not right");
-        const staff = STAFF_USERS.find((s) => s.id === staffId);
-        if (!staff) throw new ApiError("INVALID_LOGIN", "Start again");
-        writeStaffId(staff.id);
-        return staff;
+      call((): StaffSession => {
+        const account = mutate((db) => staffCodeStep(db, staffId, code));
+        writeStaffId(account.id);
+        return { ...toStaffUser(account), mustChangePassword: account.mustChangePassword };
       }),
+    changePassword: (current: string, next: string) => call(() => mutate((db) => changeStaffPassword(db, actor().id, { current, next }))),
     signOut: () => call(() => writeStaffId(null)),
+  },
+
+  staff: {
+    list: () => call(() => listStaff(loadDb(), actor())),
+    directory: () => call(() => (actor(), staffDirectory(loadDb()))),
+    create: (input: StaffCreateInput) => call(() => mutate((db) => createStaff(db, actor(), input))),
+    update: (id: string, input: StaffUpdateInput) => call(() => mutate((db) => updateStaff(db, actor(), id, input))),
+    setActive: (id: string, active: boolean) => call(() => mutate((db) => setStaffActive(db, actor(), id, active))),
+    resetPassword: (id: string) => call(() => mutate((db) => resetStaffPassword(db, actor(), id))),
+    resetMfa: (id: string) => call(() => mutate((db) => resetStaffMfa(db, actor(), id))),
+  },
+
+  site: {
+    hero: () => call(() => listHero(loadDb(), actor())),
+    createSlide: (input: HeroSlideInput) => call(() => mutate((db) => createHero(db, actor(), input))),
+    updateSlide: (id: string, input: HeroSlideInput) => call(() => mutate((db) => updateHero(db, actor(), id, input))),
+    deleteSlide: (id: string) => call(() => mutate((db) => deleteHero(db, actor(), id))),
+    reorder: (ids: string[]) => call(() => mutate((db) => reorderHero(db, actor(), ids))),
+    /** The image arrives already resized by the browser (lib/image.ts). */
+    upload: async (image: Blob, width: number, height: number) => {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new ApiError("VALIDATION", "Couldn't read that file"));
+        reader.readAsDataURL(image);
+      });
+      return call(() => mutate((db) => uploadMedia(db, actor(), dataUrl, width, height)));
+    },
   },
 
   analytics: () => call(() => analytics(loadDb(), actor())),

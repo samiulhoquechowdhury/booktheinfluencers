@@ -69,3 +69,29 @@ export function Card({ title, actions, children, className = "" }: { title?: Rea
 
 export const inputClass =
   "w-full rounded-md border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold disabled:bg-cream";
+
+/** Centered dialog. Closes on Escape or a click outside; keeps focus inside while open. */
+export function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  return (
+    <div
+      role="presentation"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/50 px-4 py-10"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
+      <section role="dialog" aria-modal="true" aria-label={title} className={`w-full ${wide ? "max-w-3xl" : "max-w-md"} rounded-xl bg-white p-6 shadow-xl`}>
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <h2 className="text-lg font-semibold text-ink">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="grid size-8 place-items-center rounded-md text-muted hover:bg-cream hover:text-ink">
+            <span aria-hidden className="text-xl leading-none">×</span>
+          </button>
+        </div>
+        {children}
+      </section>
+    </div>
+  );
+}

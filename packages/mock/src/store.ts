@@ -1,6 +1,8 @@
 import type { MockDb } from "./types";
 import { buildSeed } from "./seed";
 import { seedCalendar } from "./server";
+import { DEFAULT_HERO_SLIDES } from "./site";
+import { seedStaffAccounts } from "./staff-accounts";
 
 // Browser-only persistence for the mock API. Bump the key when the record shapes change.
 const DB_KEY = "btf.mock.db.v1";
@@ -48,6 +50,9 @@ function upgrade(db: MockDb): MockDb {
       for (const date of dates) if (!db.calendar[slug]?.some((r) => r.date === date)) (db.calendar[slug] ??= []).push({ date, source: "artist", note: null, bookingId: null });
   }
   db.calendarSelfEdit ??= {};
+  db.staffAccounts ??= seedStaffAccounts();
+  db.heroSlides ??= structuredClone(DEFAULT_HERO_SLIDES);
+  db.media ??= {};
   return db;
 }
 

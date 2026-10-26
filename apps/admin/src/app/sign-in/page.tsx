@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LoaderCircle, ShieldCheck } from "lucide-react";
+import { Copy, LoaderCircle, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 import { DEMO_OTP, STAFF_DEMO_PASSWORD, STAFF_USERS } from "@repo/mock/internal";
-import { api, errorMessage } from "@/lib/api";
+import { api, errorMessage, type PasswordStep } from "@/lib/api";
 import { keys } from "@/lib/hooks";
 import { inputClass } from "@/components/ui";
 
@@ -16,8 +17,15 @@ export default function StaffSignInPage() {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [staffId, setStaffId] = useState<string | null>(null);
+  const [setup, setSetup] = useState<PasswordStep["setup"]>();
 
-  const step1 = useMutation({ mutationFn: () => api.auth.password(email, password), onSuccess: (r) => setStaffId(r.staffId) });
+  const step1 = useMutation({
+    mutationFn: () => api.auth.password(email, password),
+    onSuccess: (r) => {
+      setStaffId(r.staffId);
+      setSetup(r.setup);
+    },
+  });
   const step2 = useMutation({
     mutationFn: () => api.auth.totp(staffId!, code),
     onSuccess: (staff) => {
@@ -67,7 +75,25 @@ export default function StaffSignInPage() {
                 step2.mutate();
               }}
             >
-              <p className="text-sm text-muted">Enter the 6-digit code from your authenticator app.</p>
+              {setup ? (
+                <div className="space-y-3 rounded-lg bg-cream p-4 text-sm">
+                  <p className="font-semibold text-ink">Set up your authenticator</p>
+                  <ol className="list-decimal space-y-1 pl-5 text-ink-soft">
+                    <li>Open Google Authenticator, Microsoft Authenticator or 1Password.</li>
+                    <li>Add an account with this setup key (time-based):</li>
+                  </ol>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 break-all rounded-md bg-white px-3 py-2 font-mono text-xs tracking-wider text-ink ring-1 ring-line">{setup.secret.match(/.{1,4}/g)?.join(" ")}</code>
+                    <button type="button" onClick={() => navigator.clipboard?.writeText(setup.secret).then(() => toast.success("Key copied"))} aria-label="Copy setup key" className="grid size-9 place-items-center rounded-md bg-white ring-1 ring-line hover:ring-gold">
+                      <Copy className="size-4" aria-hidden />
+                    </button>
+                  </div>
+                  <a href={setup.uri} className="inline-block text-xs font-medium text-gold-deep hover:underline">On your phone? Open it in your authenticator app</a>
+                  <p className="text-ink-soft">Then enter the 6-digit code it shows.</p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted">Enter the 6-digit code from your authenticator app.</p>
+              )}
               <input
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -82,7 +108,7 @@ export default function StaffSignInPage() {
                 {step2.isPending && <LoaderCircle className="animate-spin" aria-hidden />}
                 Verify
               </button>
-              <button type="button" onClick={() => { setStaffId(null); setCode(""); step2.reset(); }} className="w-full text-sm text-muted hover:text-ink">
+              <button type="button" onClick={() => { setStaffId(null); setSetup(undefined); setCode(""); step2.reset(); }} className="w-full text-sm text-muted hover:text-ink">
                 Use a different account
               </button>
             </form>

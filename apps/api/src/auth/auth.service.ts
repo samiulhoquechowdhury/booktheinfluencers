@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { verifyPassword, type Role, type User } from "@repo/db";
+import { hashPassword, verifyPassword, type Role, type User } from "@repo/db";
 import { INDIAN_MOBILE } from "@repo/schemas";
 import { env } from "../config/env";
 import { DomainError, unauthenticated } from "../common/errors";
@@ -11,6 +11,8 @@ import {
   newRefreshToken,
   safeEqual,
   signAccessToken,
+  newTotpSecret,
+  otpauthUrl,
   signMfaChallenge,
   verifyMfaChallenge,
   verifyTotp,
@@ -23,7 +25,7 @@ const OTP_WINDOW_MS = 10 * 60_000;
 const OTP_RESEND_GAP_MS = 30_000;
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60_000;
 
-export type SessionUser = { id: string; name: string; phone: string | null; email: string | null; roles: Role[]; talentSlug: string | null };
+export type SessionUser = { id: string; name: string; phone: string | null; email: string | null; roles: Role[]; talentSlug: string | null; mustChangePassword: boolean };
 export type IssuedSession = { accessToken: string; refreshToken: string; user: SessionUser };
 
 @Injectable()
@@ -76,23 +78,44 @@ export class AuthService {
     return this.issue(user, false);
   }
 
-  /** AUTH-2 step 1. Same error for unknown email and wrong password. */
+  /**
+   * AUTH-2 step 1. Same error for unknown email and wrong password. Staff without an authenticator
+   * get a fresh secret to add to their app; it's saved only once a code from it is verified.
+   */
   async staffPassword(email: string, password: string) {
     const user = await this.prisma.db.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     const ok = user?.passwordHash && user.roles.some((r) => STAFF_ROLES.includes(r)) && (await verifyPassword(password, user.passwordHash));
     if (!user || !ok) throw new DomainError("INVALID_LOGIN", "Email or password is incorrect", 401);
-    return { mfaToken: await signMfaChallenge(user.id) };
+    if (user.disabledAt) throw new DomainError("ACCOUNT_DISABLED", "This account has been deactivated. Ask a super admin to restore it.", 403);
+    if (user.mfaSecret) return { mfaToken: await signMfaChallenge(user.id) };
+    const secret = newTotpSecret();
+    return { mfaToken: await signMfaChallenge(user.id, secret), setup: { secret, uri: otpauthUrl(secret, user.email!) } };
   }
 
   /** AUTH-2 step 2: TOTP. MFA_DEMO_CODE only exists outside production (env.ts refuses it there). */
   async staffMfa(mfaToken: string, code: string): Promise<IssuedSession> {
-    const userId = await verifyMfaChallenge(mfaToken).catch(() => {
+    const { userId, enrol } = await verifyMfaChallenge(mfaToken).catch(() => {
       throw new DomainError("MFA_EXPIRED", "Sign-in timed out. Start again.", 401);
     });
     const user = await this.prisma.db.user.findUniqueOrThrow({ where: { id: userId } });
-    const ok = (user.mfaSecret && verifyTotp(user.mfaSecret, code)) || (env.MFA_DEMO_CODE !== undefined && safeEqual(code, env.MFA_DEMO_CODE));
+    if (user.disabledAt) throw new DomainError("ACCOUNT_DISABLED", "This account has been deactivated. Ask a super admin to restore it.", 403);
+    const secret = user.mfaSecret ?? enrol;
+    const enrolled = Boolean(secret && verifyTotp(secret, code));
+    const ok = enrolled || (env.MFA_DEMO_CODE !== undefined && safeEqual(code, env.MFA_DEMO_CODE));
     if (!ok) throw new DomainError("OTP_INVALID", "That code is not right", 401);
+    await this.prisma.db.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date(), ...(!user.mfaSecret && enrol && enrolled && { mfaSecret: enrol }) },
+    });
     return this.issue(user, true);
+  }
+
+  /** Staff choose their own password (required after a temporary one). Other sessions are signed out. */
+  async changeStaffPassword(userId: string, current: string, next: string) {
+    const user = await this.prisma.db.user.findUnique({ where: { id: userId } });
+    if (!user?.passwordHash || !(await verifyPassword(current, user.passwordHash))) throw new DomainError("INVALID_PASSWORD", "Your current password is not right", 400);
+    if (current === next) throw new DomainError("VALIDATION", "Choose a password you haven't used here");
+    await this.prisma.db.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(next), mustChangePassword: false } });
   }
 
   /** AUTH-5: rotating refresh tokens; reuse of a rotated token revokes every session. */
@@ -100,6 +123,7 @@ export class AuthService {
     if (!refreshToken) throw unauthenticated();
     const session = await this.prisma.db.session.findUnique({ where: { refreshTokenHash: hmac(refreshToken) }, include: { user: true } });
     if (!session || session.expiresAt < new Date()) throw unauthenticated("Your session has expired");
+    if (session.user.disabledAt) throw unauthenticated("This account has been deactivated");
     if (session.revokedAt) {
       await this.prisma.db.session.updateMany({ where: { userId: session.userId, revokedAt: null }, data: { revokedAt: new Date() } });
       throw unauthenticated("Please sign in again");
@@ -116,7 +140,7 @@ export class AuthService {
 
   async me(userId: string): Promise<SessionUser> {
     const user = await this.prisma.db.user.findUnique({ where: { id: userId }, include: { talent: { select: { slug: true } } } });
-    if (!user || user.deletedAt) throw unauthenticated();
+    if (!user || user.deletedAt || user.disabledAt) throw unauthenticated();
     return toSessionUser(user, user.talent?.slug ?? null);
   }
 
@@ -146,4 +170,5 @@ const toSessionUser = (user: User, talentSlug: string | null): SessionUser => ({
   email: user.email,
   roles: user.roles,
   talentSlug,
+  mustChangePassword: user.mustChangePassword,
 });

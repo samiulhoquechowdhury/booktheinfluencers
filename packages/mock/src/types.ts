@@ -5,6 +5,8 @@ import type {
   MilestoneStatus,
   PayoutStatus,
   QuoteStatus,
+  HeroSlideRecord,
+  StaffRoleName,
   TalentAdminDetail,
 } from "@repo/schemas";
 import type { LeadStage } from "@repo/utils";
@@ -170,7 +172,28 @@ export type MockDb = {
   audit: AuditRec[];
   /** ADM-1…5: talents created or edited in the admin, keyed by slug. Untouched seed talents aren't stored. */
   talentRecords: Record<string, TalentRecord>;
+  /** Staff accounts managed by super admins (seeded from STAFF_USERS). */
+  staffAccounts: StaffAccountRec[];
+  /** Home page hero carousel and the images uploaded for it (data URLs in demo mode). */
+  heroSlides: HeroSlideRec[];
+  media: Record<string, string>;
 };
+
+export type StaffAccountRec = {
+  id: string;
+  name: string;
+  email: string;
+  roles: StaffRoleName[];
+  active: boolean;
+  /** Demo only: plain text so the demo can show it. The API stores a scrypt hash. */
+  password: string;
+  mustChangePassword: boolean;
+  mfaEnrolled: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+};
+
+export type HeroSlideRec = Omit<HeroSlideRecord, "imageUrl"> & { imagePath: string | null };
 
 export type TalentRecord = Omit<TalentAdminDetail, "bookingCount" | "publishBlockers"> & { createdAt: string };
 

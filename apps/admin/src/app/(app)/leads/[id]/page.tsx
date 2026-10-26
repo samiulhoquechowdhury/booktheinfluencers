@@ -6,8 +6,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Lock, Phone, Send } from "lucide-react";
 import { formatDateTime, formatDateWithWeekday, type LeadStage } from "@repo/utils";
-import { BUDGET_BANDS, TALENTS } from "@repo/mock/catalogue/data";
-import { STAFF_USERS } from "@repo/mock/internal";
+import { BUDGET_BANDS } from "@repo/mock/catalogue/data";
 import { api, can, errorMessage, type LeadDetail, type StaffUser } from "@/lib/api";
 import { STAGE_LABELS, inr, istDate, stageTone } from "@/lib/format";
 import { keys, useStaffMutation, useStaffSession } from "@/lib/hooks";
@@ -75,8 +74,11 @@ function Controls({ lead, staff }: { lead: LeadDetail; staff: StaffUser }) {
   const assign = useStaffMutation((owner: string) => api.leads.assign(lead.id, owner), "Owner assigned");
   const move = useStaffMutation(({ stage, text }: { stage: LeadStage; text?: string }) => api.leads.move(lead.id, stage, text), "Stage updated");
   const add = useStaffMutation((slug: string) => api.leads.addTalent(lead.id, slug), "Artist added");
-  const owners = STAFF_USERS.filter((s) => s.roles.includes("SALES") || s.roles.includes("SUPER_ADMIN"));
-  const available = TALENTS.filter((t) => !lead.bookings.some((b) => b.talentSlug === t.slug));
+  // Live lists: staff added in Staff and talents published in Talents show up here.
+  const directory = useQuery({ queryKey: ["staff-directory"], queryFn: api.staff.directory });
+  const roster = useQuery({ queryKey: keys.talents, queryFn: api.talents.list });
+  const owners = (directory.data ?? []).filter((s) => s.roles.includes("SALES") || s.roles.includes("SUPER_ADMIN"));
+  const available = (roster.data ?? []).filter((t) => t.status === "PUBLISHED" && !lead.bookings.some((b) => b.talentSlug === t.slug));
   const sales = can(staff, "SALES");
 
   if (!sales && !can(staff, "TALENT_MANAGER")) return null;

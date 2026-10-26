@@ -12,6 +12,8 @@ export const keys = {
   payments: ["payments"] as const,
   payouts: ["payouts"] as const,
   talents: ["talents"] as const,
+  staff: ["staff-accounts"] as const,
+  hero: ["site", "hero"] as const,
   talent: (slug: string) => ["talents", slug] as const,
   blackouts: (slug: string) => ["talents", slug, "blackouts"] as const,
   inbox: ["inbox"] as const,

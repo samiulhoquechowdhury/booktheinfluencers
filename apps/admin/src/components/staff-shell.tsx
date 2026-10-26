@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, CreditCard, ExternalLink, Inbox, LayoutDashboard, LogOut, Menu, ScrollText, Users, Wallet, X } from "lucide-react";
+import { ClipboardList, CreditCard, ExternalLink, Globe, Inbox, KeyRound, LayoutDashboard, LogOut, Menu, ScrollText, ShieldCheck, UserCog, Users, Wallet, X } from "lucide-react";
 import type { StaffRole } from "@repo/mock/internal";
 import { api, can, type StaffUser } from "@/lib/api";
 import { useStaffSession } from "@/lib/hooks";
+import { ChangePasswordForm } from "./change-password";
 import { Loading } from "./ui";
 
 const NAV: { href: string; label: string; icon: typeof LayoutDashboard; roles?: StaffRole[] }[] = [
@@ -17,6 +18,8 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; roles?: 
   { href: "/payouts", label: "Payouts", icon: Wallet, roles: ["ACCOUNTS"] },
   { href: "/talents", label: "Talents", icon: Users },
   { href: "/inbox", label: "Inbox", icon: Inbox },
+  { href: "/staff", label: "Staff", icon: UserCog, roles: ["SUPER_ADMIN"] },
+  { href: "/website", label: "Website", icon: Globe, roles: ["SUPER_ADMIN"] },
   { href: "/audit", label: "Audit log", icon: ScrollText, roles: ["SUPER_ADMIN"] },
 ];
 
@@ -38,7 +41,27 @@ export function StaffShell({ children }: { children: ReactNode }) {
   }, [isPending, staff, router]);
 
   if (isPending || !staff) return <Loading label="Checking your session" />;
+  if (staff.mustChangePassword) return <FirstPassword name={staff.name} />;
   return <Shell staff={staff}>{children}</Shell>;
+}
+
+/** After a temporary password from a super admin, nothing else opens until they choose their own. */
+function FirstPassword({ name }: { name: string }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center px-4 py-12">
+      <div className="w-full max-w-sm rounded-xl border border-line bg-white p-7 shadow-card">
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gold-deep">
+          <ShieldCheck className="size-4" aria-hidden />
+          One more step
+        </p>
+        <h1 className="mt-3 text-2xl font-semibold text-ink">Choose your password</h1>
+        <p className="mt-2 text-sm text-muted">Welcome, {name}. You signed in with a temporary password — replace it with one only you know.</p>
+        <div className="mt-6">
+          <ChangePasswordForm />
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function Shell({ staff, children }: { staff: StaffUser; children: ReactNode }) {
@@ -89,6 +112,10 @@ function Shell({ staff, children }: { staff: StaffUser; children: ReactNode }) {
         <p className="text-sm font-medium text-white">{staff.name}</p>
         <p className="text-xs text-white/55">{staff.roles.map((r) => ROLE_LABELS[r]).join(", ")}</p>
       </div>
+      <Link href="/account" onClick={() => setOpen(false)} className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-white/65 hover:bg-white/5 hover:text-white">
+        <KeyRound className="size-4" aria-hidden />
+        Change password
+      </Link>
       <button
         type="button"
         onClick={() => signOut.mutate()}

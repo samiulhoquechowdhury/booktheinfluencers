@@ -1,17 +1,21 @@
 "use client";
 
 import Image, { type StaticImageData } from "next/image";
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import type { PublicHeroSlide } from "@repo/schemas";
+import { publicHero } from "@repo/mock/site";
+import { loadDb, onExternalChange } from "@repo/mock/store";
+import { DEMO_MODE } from "@/lib/api/client";
 import { ArrowRight, Pause, Play } from "lucide-react";
 
-export type HeroSlide = {
-  src: StaticImageData | string;
-  alt: string;
-  eyebrow: string;
-  title: string;
-  accent: string;
-  body: string;
-  cta: { label: string; href: string };
+const BUNDLED_PATH = "/images/hero.jpg";
+
+/** Demo mode: slides edited in the CRM live in this browser's mock store, so read them from there. */
+const subscribeStore = (onChange: () => void) => onExternalChange(onChange);
+const storeSnapshot = () => (DEMO_MODE ? JSON.stringify(publicHero(loadDb())) : null);
+const useDemoSlides = () => {
+  const json = useSyncExternalStore(subscribeStore, storeSnapshot, () => null);
+  return useMemo(() => (json ? (JSON.parse(json) as PublicHeroSlide[]) : null), [json]);
 };
 
 const INTERVAL_MS = 6500;
@@ -28,8 +32,11 @@ const useReducedMotion = () => useSyncExternalStore(subscribeMotion, () => windo
  * Cross-fading hero. Advances on its own, pauses while hovered or focused, and stays still
  * for people who ask for reduced motion. All slides share one box, so nothing jumps.
  */
-export function HeroCarousel({ slides, ratio, children }: { slides: HeroSlide[]; ratio: string; children: ReactNode }) {
-  const [active, setActive] = useState(0);
+export function HeroCarousel({ slides: served, bundled, ratio, children }: { slides: PublicHeroSlide[]; bundled: StaticImageData; ratio: string; children: ReactNode }) {
+  const demo = useDemoSlides();
+  const slides = demo?.length ? demo : served;
+  const [picked, setActive] = useState(0);
+  const active = picked % slides.length;
   const [hovered, setHovered] = useState(false);
   const reducedMotion = useReducedMotion();
   // null = no choice yet: plays unless the visitor asked for reduced motion.
@@ -59,13 +66,15 @@ export function HeroCarousel({ slides, ratio, children }: { slides: HeroSlide[];
       <div className="relative lg:absolute lg:right-0 lg:top-0 lg:w-[70%]" style={{ aspectRatio: ratio }}>
         {slides.map((slide, i) => (
           <Image
-            key={slide.alt}
-            src={slide.src}
-            alt={i === active ? slide.alt : ""}
+            key={slide.id}
+            src={slide.imageUrl === BUNDLED_PATH ? bundled : slide.imageUrl}
+            alt={i === active ? slide.imageAlt : ""}
             aria-hidden={i !== active}
             fill
             priority={i === 0}
-            placeholder={typeof slide.src === "string" ? "empty" : "blur"}
+            // Uploaded photos are already resized by the CRM and served with long-lived caching.
+            unoptimized={slide.imageUrl !== BUNDLED_PATH}
+            placeholder={slide.imageUrl === BUNDLED_PATH ? "blur" : "empty"}
             sizes="(min-width: 1024px) 70vw, 100vw"
             className={`-z-20 object-cover transition-opacity duration-1000 ease-out ${i === active ? "opacity-100" : "opacity-0"}`}
           />
@@ -85,7 +94,7 @@ export function HeroCarousel({ slides, ratio, children }: { slides: HeroSlide[];
                 const shown = i === active;
                 return (
                   <div
-                    key={slide.alt}
+                    key={slide.id}
                     aria-hidden={!shown}
                     inert={!shown}
                     role={many ? "group" : undefined}
@@ -100,8 +109,8 @@ export function HeroCarousel({ slides, ratio, children }: { slides: HeroSlide[];
                     </Heading>
                     <p className="mt-6 max-w-lg text-base leading-relaxed text-white/80 sm:text-lg lg:max-w-md">{slide.body}</p>
                     <div className="mt-8 flex flex-wrap gap-4 xl:mt-9">
-                      <a href={slide.cta.href} className="btn btn-gold">
-                        {slide.cta.label}
+                      <a href={slide.ctaHref} className="btn btn-gold">
+                        {slide.ctaLabel}
                         <ArrowRight aria-hidden />
                       </a>
                       <a href="#for-talent" className="btn btn-outline-light">
@@ -120,7 +129,7 @@ export function HeroCarousel({ slides, ratio, children }: { slides: HeroSlide[];
                 <div role="group" aria-label="Choose a slide" className="flex items-center gap-2">
                   {slides.map((slide, i) => (
                     <button
-                      key={slide.alt}
+                      key={slide.id}
                       type="button"
                       onClick={() => setActive(i)}
                       aria-label={`Show slide ${i + 1}: ${slide.title} ${slide.accent}`}

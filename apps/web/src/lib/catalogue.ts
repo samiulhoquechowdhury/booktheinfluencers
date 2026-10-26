@@ -1,5 +1,6 @@
 import { cacheLife } from "next/cache";
-import type { TalentProfile, TalentSummary } from "@repo/schemas";
+import type { PublicHeroSlide, TalentProfile, TalentSummary } from "@repo/schemas";
+import { DEFAULT_HERO_SLIDES, publicHero } from "@repo/mock/site";
 import { CATEGORIES, TALENTS } from "@repo/mock/catalogue/data";
 import { featuredTalents, getTalent, searchTalents, similarTalents, type TalentFilters } from "@repo/mock/catalogue/query";
 import { filtersToQuery, type LockedFilters } from "@repo/mock/catalogue/query-string";
@@ -74,4 +75,13 @@ export async function allTalentSlugs(): Promise<string[]> {
     slugs.push(...res.data.map((t) => t.slug));
   }
   return slugs;
+}
+
+/** Home page hero slides (edited in the CRM → Website). Falls back to the built-in slide if the API is down. */
+export async function heroSlides(): Promise<PublicHeroSlide[]> {
+  "use cache";
+  cacheLife("minutes");
+  if (!CATALOGUE_FROM_API) return publicHero({ heroSlides: DEFAULT_HERO_SLIDES, media: {} });
+  const slides = await apiGet<PublicHeroSlide[]>("/site/hero").catch(() => null);
+  return slides?.length ? slides : publicHero({ heroSlides: DEFAULT_HERO_SLIDES, media: {} });
 }

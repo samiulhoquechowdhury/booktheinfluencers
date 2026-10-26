@@ -17,6 +17,8 @@ import {
   handleGatewayWebhook,
   postLeadMessage,
 } from "./server";
+import { DEFAULT_HERO_SLIDES } from "./site";
+import { seedStaffAccounts } from "./staff-accounts";
 import type { MockDb } from "./types";
 import { TALENTS } from "./catalogue/data";
 
@@ -100,6 +102,9 @@ export function buildSeed(): MockDb {
     favourites: { [DEMO_CUSTOMER_ID]: ["aanya-kapoor", "dj-rhea"] },
     calendar: seedCalendar(),
     calendarSelfEdit: {},
+    staffAccounts: seedStaffAccounts(),
+    heroSlides: structuredClone(DEFAULT_HERO_SLIDES),
+    media: {},
     processedWebhooks: [],
     messages: [],
     contactRequests: [],

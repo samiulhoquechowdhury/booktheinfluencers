@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Inject, Patch, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { INDIAN_MOBILE } from "@repo/schemas";
+import { ChangePasswordSchema, INDIAN_MOBILE } from "@repo/schemas";
 import { env } from "../config/env";
 import { parse } from "../common/validate";
 import { AuthService, type IssuedSession } from "./auth.service";
@@ -53,6 +53,14 @@ export class AuthController {
   async staffMfa(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
     const { mfaToken, code } = parse(StaffMfa, body);
     return this.respond(res, await this.auth.staffMfa(mfaToken, code), "staff");
+  }
+
+  /** Any signed-in staff member; required after a temporary password. */
+  @Post("staff/password")
+  @HttpCode(204)
+  changePassword(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const { current, next } = parse(ChangePasswordSchema, body);
+    return this.auth.changeStaffPassword(user.id, current, next);
   }
 
   @Public()

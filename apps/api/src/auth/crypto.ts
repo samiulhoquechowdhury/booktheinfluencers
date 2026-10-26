@@ -33,18 +33,38 @@ export async function verifyAccessToken(token: string): Promise<AccessClaims> {
 }
 
 /** Step 1 of staff sign-in proves the password; this short-lived token carries that into the MFA step. */
-export async function signMfaChallenge(userId: string) {
-  return new SignJWT({}).setProtectedHeader({ alg: "HS256" }).setSubject(userId).setIssuedAt().setExpirationTime("5m").setAudience("mfa").sign(jwtKey);
+/** `enrol` carries a new authenticator secret for staff who haven't set one up; it's saved once a code proves it. */
+export async function signMfaChallenge(userId: string, enrol?: string) {
+  return new SignJWT(enrol ? { enrol } : {}).setProtectedHeader({ alg: "HS256" }).setSubject(userId).setIssuedAt().setExpirationTime("10m").setAudience("mfa").sign(jwtKey);
 }
 
 export async function verifyMfaChallenge(token: string) {
   const { payload } = await jwtVerify(token, jwtKey, { audience: "mfa", algorithms: ["HS256"] });
-  return payload.sub!;
+  return { userId: payload.sub!, enrol: typeof payload.enrol === "string" ? payload.enrol : undefined };
+}
+
+/** One-time passwords handed to staff by a super admin; they choose their own at first sign-in. */
+export function newTemporaryPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const pick = () => alphabet[randomInt(0, alphabet.length)];
+  const body = Array.from({ length: 12 }, pick).join("");
+  return `${body.slice(0, 4)}-${body.slice(4, 8)}-${body.slice(8)}${randomInt(2, 10)}`;
 }
 
 // ---------- TOTP (RFC 6238): SHA-1, 30-second steps, 6 digits, ±1 step of clock drift ----------
 
 const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+export function base32Encode(bytes: Buffer) {
+  let bits = "";
+  for (const byte of bytes) bits += byte.toString(2).padStart(8, "0");
+  return (bits.match(/.{1,5}/g) ?? []).map((chunk) => BASE32[Number.parseInt(chunk.padEnd(5, "0"), 2)]).join("");
+}
+
+export const newTotpSecret = () => base32Encode(randomBytes(20));
+
+export const otpauthUrl = (secret: string, account: string) =>
+  `otpauth://totp/${encodeURIComponent(`Book The Influencers:${account}`)}?secret=${secret}&issuer=${encodeURIComponent("Book The Influencers")}&algorithm=SHA1&digits=6&period=30`;
 
 export function base32Decode(input: string): Buffer {
   const clean = input.replace(/=+$/, "").replace(/\s/g, "").toUpperCase();

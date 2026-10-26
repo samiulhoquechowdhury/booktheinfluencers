@@ -1,9 +1,9 @@
 "use client";
 
 import { ApiError } from "@repo/mock/server";
-import { STAFF_ROLES, type StaffRole, type StaffUser } from "@repo/mock/internal";
-import type { TalentAdminDetail, TalentCalendar } from "@repo/schemas";
-import type { mockApi, LeadDetail, LeadRow } from "./mock-api";
+import { STAFF_ROLES, type StaffRole } from "@repo/mock/internal";
+import type { HeroSlideRecord, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
+import type { mockApi, LeadDetail, LeadRow, StaffSession } from "./mock-api";
 
 // HTTP transport for the staff API (/v1/admin). Same interface as mock-api.ts, so the screens
 // don't change: the adapters below translate API records into the shapes the screens use.
@@ -12,14 +12,15 @@ import type { mockApi, LeadDetail, LeadRow } from "./mock-api";
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
 
 let accessToken: string | null = null;
-let refreshing: Promise<StaffUser | null> | null = null;
+let refreshing: Promise<StaffSession | null> | null = null;
 
-type ApiUser = { id: string; name: string; email: string | null; roles: string[] };
-const toStaff = (user: ApiUser): StaffUser => ({
+type ApiUser = { id: string; name: string; email: string | null; roles: string[]; mustChangePassword?: boolean };
+const toStaff = (user: ApiUser): StaffSession => ({
   id: user.id,
   name: user.name,
   email: user.email ?? "",
   roles: user.roles.filter((r): r is StaffRole => (STAFF_ROLES as readonly string[]).includes(r)),
+  mustChangePassword: Boolean(user.mustChangePassword),
 });
 
 function refresh() {
@@ -61,6 +62,24 @@ async function request<T>(path: string, init: { method?: string; body?: unknown;
 
 const post = <T = void>(path: string, body?: unknown) => request<T>(path, { method: "POST", body });
 const id = (value: string) => encodeURIComponent(value);
+
+/** Image uploads go as raw bytes with their own content type (the API's JSON parser skips them). */
+async function upload(path: string, file: Blob, retried = false): Promise<{ id: string; url: string; width: number; height: number }> {
+  if (!accessToken && !retried) await refresh();
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": file.type, ...(accessToken && { authorization: `Bearer ${accessToken}` }) },
+    body: file,
+  });
+  if (res.status === 401 && !retried) {
+    accessToken = null;
+    if (await refresh()) return upload(path, file, true);
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(data?.error?.code ?? "HTTP_ERROR", data?.error?.message ?? "Upload failed. Please try again.");
+  return data;
+}
 /** API records are a superset of what the screens read; the adapters shape what differs. */
 const as = <T>(value: unknown) => value as T;
 
@@ -153,12 +172,16 @@ export const httpApi: typeof mockApi = {
   auth: {
     session: async () => (accessToken ? toStaff(await request<ApiUser>("/auth/me")) : refresh()),
     /** Step 1 returns a short-lived MFA token; the screens carry it as `staffId` into step 2. */
-    password: async (email, password) => ({ staffId: (await request<{ mfaToken: string }>("/auth/staff/login", { method: "POST", body: { email, password }, auth: false })).mfaToken }),
+    password: async (email, password) => {
+      const step = await request<{ mfaToken: string; setup?: { secret: string; uri: string } }>("/auth/staff/login", { method: "POST", body: { email, password }, auth: false });
+      return { staffId: step.mfaToken, setup: step.setup };
+    },
     totp: async (mfaToken, code) => {
       const session = await request<{ accessToken: string; user: ApiUser }>("/auth/staff/mfa", { method: "POST", body: { mfaToken, code }, auth: false });
       accessToken = session.accessToken;
       return toStaff(session.user);
     },
+    changePassword: (current, next) => post("/auth/staff/password", { current, next }),
     signOut: async () => {
       await request("/auth/staff/logout", { method: "POST", auth: false });
       accessToken = null;
@@ -171,7 +194,8 @@ export const httpApi: typeof mockApi = {
     list: () => request<LeadRow[]>("/admin/leads"),
     get: async (leadId) => toLeadDetail(await request<Raw>(`/admin/leads/${id(leadId)}`)),
     assign: async (leadId, ownerName) => {
-      const owner = STAFF_DIRECTORY.find((s) => s.name === ownerName);
+      const directory = await request<{ id: string; name: string }[]>("/admin/staff-directory");
+      const owner = directory.find((s) => s.name === ownerName);
       if (!owner) throw new ApiError("VALIDATION", "Pick a sales owner");
       await post(`/admin/leads/${id(leadId)}/assign`, { ownerId: owner.id });
     },
@@ -231,11 +255,24 @@ export const httpApi: typeof mockApi = {
     setApplication: (applicationId, status) => post(`/admin/applications/${id(applicationId)}/status`, { status }),
   },
 
+  staff: {
+    list: () => request<StaffAccount[]>("/admin/staff"),
+    directory: () => request<{ id: string; name: string; roles: StaffRoleName[] }[]>("/admin/staff-directory"),
+    create: (input) => post<StaffAccount & TemporaryPassword>("/admin/staff", input),
+    update: (staffId, input) => request<StaffAccount>(`/admin/staff/${id(staffId)}`, { method: "PUT", body: input }),
+    setActive: (staffId, active) => post<StaffAccount>(`/admin/staff/${id(staffId)}/active`, { active }),
+    resetPassword: (staffId) => post<TemporaryPassword>(`/admin/staff/${id(staffId)}/reset-password`),
+    resetMfa: (staffId) => post<StaffAccount>(`/admin/staff/${id(staffId)}/reset-mfa`),
+  },
+
+  site: {
+    hero: () => request<HeroSlideRecord[]>("/admin/site/hero"),
+    createSlide: (input) => post<HeroSlideRecord>("/admin/site/hero", input),
+    updateSlide: (slideId, input) => request<HeroSlideRecord>(`/admin/site/hero/${id(slideId)}`, { method: "PUT", body: input }),
+    deleteSlide: (slideId) => request(`/admin/site/hero/${id(slideId)}`, { method: "DELETE" }),
+    reorder: (ids) => post("/admin/site/hero-order", { ids }),
+    upload: (image, width, height) => upload(`/admin/media?width=${width}&height=${height}`, image),
+  },
+
   audit: async () => as((await request<Raw[]>("/admin/audit")).map((a) => ({ ...a, at: a.createdAt }))),
 };
-
-/** Owners are picked by name on screen; the API wants the user id. Seeded staff share these ids. */
-const STAFF_DIRECTORY: { id: string; name: string }[] = [];
-export function registerStaffDirectory(people: { id: string; name: string }[]) {
-  STAFF_DIRECTORY.splice(0, STAFF_DIRECTORY.length, ...people);
-}
