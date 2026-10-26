@@ -5,6 +5,7 @@ import { LEAD_STAGES } from "@repo/utils";
 import { jsonSafe } from "../common/json";
 import { parse } from "../common/validate";
 import { CurrentUser, Roles, STAFF_ROLES, type AuthUser } from "../auth/guard";
+import { toMessage } from "../me/me.controller";
 import { BOOKING_ACTIONS, StaffService, type BookingAction } from "./staff.service";
 
 const Assign = z.object({ ownerId: z.string().min(1) });
@@ -34,6 +35,8 @@ const Draft = z.object({
 });
 const Reason = z.object({ reason: z.string().trim().min(1, "Give a reason so sales can revise it").max(500) });
 const Utr = z.object({ reference: z.string().trim().min(4, "Enter the bank transfer reference (UTR)").max(40) });
+const MessageText = z.object({ body: z.string().trim().min(1, "Write a message first").max(2000) });
+const AppStatus = z.object({ status: z.enum(["NEW", "REVIEWING", "INVITED", "DECLINED"]) });
 const DateParam = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date");
 
 /** Staff CRM API (apps/admin). Every route needs a staff role on an MFA session; finer roles in StaffService. */
@@ -153,6 +156,32 @@ export class StaffController {
   @HttpCode(204)
   unblock(@CurrentUser() user: AuthUser, @Param("slug") slug: string, @Param("date") date: string) {
     return this.staff.setBlackout(user, slug, parse(DateParam, date), false);
+  }
+
+  @Post("leads/:id/messages")
+  async replyToCustomer(@CurrentUser() user: AuthUser, @Param("id") id: string, @Body() body: unknown) {
+    return toMessage(await this.staff.replyToCustomer(user, id, parse(MessageText, body).body));
+  }
+
+  @Get("bookings/:id/messages")
+  async talentThread(@Param("id") id: string) {
+    return (await this.staff.talentThread(id)).map(toMessage);
+  }
+
+  @Post("bookings/:id/messages")
+  async replyToTalent(@CurrentUser() user: AuthUser, @Param("id") id: string, @Body() body: unknown) {
+    return toMessage(await this.staff.replyToTalent(user, id, parse(MessageText, body).body));
+  }
+
+  @Get("inbox")
+  async inbox() {
+    return jsonSafe(await this.staff.inbox());
+  }
+
+  @Post("applications/:id/status")
+  @HttpCode(204)
+  applicationStatus(@CurrentUser() user: AuthUser, @Param("id") id: string, @Body() body: unknown) {
+    return this.staff.setApplicationStatus(user, id, parse(AppStatus, body).status);
   }
 
   @Get("audit")

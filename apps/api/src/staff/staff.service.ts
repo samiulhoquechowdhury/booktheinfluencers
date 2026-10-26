@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { LeadStage, LineItemType, Prisma, Role } from "@repo/db";
+import type { ApplicationStatus, LeadStage, LineItemType, Prisma, Role } from "@repo/db";
 import { allowedNextStages, computeQuoteTotals } from "@repo/utils";
 import { DomainError, forbidden, notFound } from "../common/errors";
 import type { AuthUser } from "../auth/guard";
@@ -496,6 +496,56 @@ export class StaffService {
       if (on) await tx.blackout.upsert({ where: { talentId_date: { talentId: talent.id, date } }, create: { talentId: talent.id, date }, update: {} });
       else await tx.blackout.deleteMany({ where: { talentId: talent.id, date } });
       await this.audit(tx, user, on ? "blackout.add" : "blackout.remove", "Talent", slug, date);
+    });
+  }
+
+  // ---------- Messages & inbox ----------
+
+  async replyToCustomer(user: AuthUser, leadId: string, body: string) {
+    return this.prisma.db.$transaction(async (tx) => {
+      const lead = await tx.lead.findUnique({ where: { id: leadId } });
+      if (!lead) throw notFound("Lead");
+      const actor = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+      const message = await tx.message.create({ data: { leadId, author: "STAFF", authorId: user.id, authorName: actor.name, body } });
+      if (!lead.ownerId && can(user, "SALES")) await tx.lead.update({ where: { id: leadId }, data: { ownerId: user.id } });
+      await this.audit(tx, user, "message.customer", "Lead", lead.ref, "Replied to customer");
+      return message;
+    });
+  }
+
+  async talentThread(bookingId: string) {
+    const booking = await this.prisma.db.booking.findUnique({ where: { id: bookingId }, select: { id: true } });
+    if (!booking) throw notFound("Booking");
+    return this.prisma.db.message.findMany({ where: { bookingId }, orderBy: { createdAt: "asc" } });
+  }
+
+  async replyToTalent(user: AuthUser, bookingId: string, body: string) {
+    return this.prisma.db.$transaction(async (tx) => {
+      const booking = await tx.booking.findUnique({ where: { id: bookingId }, include: { lead: true, talent: true } });
+      if (!booking) throw notFound("Booking");
+      const actor = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+      const message = await tx.message.create({ data: { bookingId, author: "STAFF", authorId: user.id, authorName: actor.name, body } });
+      await this.audit(tx, user, "message.talent", "Booking", booking.lead.ref, `Replied to ${booking.talent.stageName}`);
+      return message;
+    });
+  }
+
+  async inbox() {
+    const [contactRequests, applications, newsletter] = await Promise.all([
+      this.prisma.db.contactRequest.findMany({ orderBy: { createdAt: "desc" } }),
+      this.prisma.db.talentApplication.findMany({ orderBy: { createdAt: "desc" } }),
+      this.prisma.db.newsletterSubscriber.findMany({ orderBy: { createdAt: "desc" } }),
+    ]);
+    return { contactRequests, applications, newsletter };
+  }
+
+  async setApplicationStatus(user: AuthUser, id: string, status: ApplicationStatus) {
+    this.require(user, "TALENT_MANAGER");
+    await this.prisma.db.$transaction(async (tx) => {
+      const app = await tx.talentApplication.update({ where: { id }, data: { status } }).catch(() => {
+        throw notFound("Application");
+      });
+      await this.audit(tx, user, "application.status", "Application", app.ref, `${app.stageName} → ${status}`);
     });
   }
 

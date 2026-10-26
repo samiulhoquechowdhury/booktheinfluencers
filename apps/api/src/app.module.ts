@@ -8,9 +8,12 @@ import { AuthGuard } from "./auth/guard";
 import { CustomerBookingsController } from "./bookings/customer.controller";
 import { CatalogueController } from "./catalogue/catalogue.controller";
 import { HealthController } from "./health/health.controller";
+import { IntakeController } from "./intake/intake.controller";
+import { MeController } from "./me/me.controller";
 import { PrismaService } from "./prisma/prisma.service";
 import { StaffController } from "./staff/staff.controller";
 import { StaffService } from "./staff/staff.service";
+import { TalentPortalController } from "./talent/talent.controller";
 import { DevProvidersController } from "./webhooks/dev-providers.controller";
 import { WebhooksController } from "./webhooks/webhooks.controller";
 
@@ -20,6 +23,9 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     AuthController,
     CatalogueController,
     CustomerBookingsController,
+    MeController,
+    TalentPortalController,
+    IntakeController,
     StaffController,
     WebhooksController,
     // Simulated provider screens never ship to production.
