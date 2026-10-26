@@ -263,6 +263,7 @@ export const httpApi: typeof mockApi = {
     setActive: (staffId, active) => post<StaffAccount>(`/admin/staff/${id(staffId)}/active`, { active }),
     resetPassword: (staffId) => post<TemporaryPassword>(`/admin/staff/${id(staffId)}/reset-password`),
     resetMfa: (staffId) => post<StaffAccount>(`/admin/staff/${id(staffId)}/reset-mfa`),
+    transfer: (staffId, input) => post<StaffAccount>(`/admin/staff/${id(staffId)}/make-super-admin`, input),
   },
 
   site: {

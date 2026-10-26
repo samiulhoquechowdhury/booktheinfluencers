@@ -1,4 +1,4 @@
-import { ChangePasswordSchema, StaffCreateSchema, StaffUpdateSchema, type StaffAccount } from "@repo/schemas";
+import { ChangePasswordSchema, StaffCreateSchema, StaffUpdateSchema, SuperAdminTransferSchema, type StaffAccount } from "@repo/schemas";
 import { DEMO_OTP, STAFF_DEMO_PASSWORD, STAFF_USERS, type StaffUser } from "./internal";
 import { ApiError, newId, nowIso } from "./server";
 import { audit } from "./staff";
@@ -36,12 +36,6 @@ function mustAccount(db: MockDb, id: string) {
   const account = db.staffAccounts.find((a) => a.id === id);
   if (!account) throw new ApiError("NOT_FOUND", "Staff member not found");
   return account;
-}
-
-function keepASuperAdmin(db: MockDb, exceptId: string) {
-  if (!db.staffAccounts.some((a) => a.id !== exceptId && a.active && a.roles.includes("SUPER_ADMIN"))) {
-    throw new ApiError("LAST_SUPER_ADMIN", "There must always be at least one active super admin");
-  }
 }
 
 /** Demo temporary passwords are readable on purpose; the API generates random ones. */
@@ -101,21 +95,38 @@ export function updateStaff(db: MockDb, actor: StaffUser, id: string, raw: unkno
   requireAdmin(actor);
   const input = parse(StaffUpdateSchema.safeParse(raw));
   const account = mustAccount(db, id);
-  const losingAdmin = account.roles.includes("SUPER_ADMIN") && !input.roles.includes("SUPER_ADMIN");
-  if (losingAdmin && id === actor.id) throw new ApiError("SELF", "You can't remove your own super admin role");
-  if (losingAdmin) keepASuperAdmin(db, id);
+  const isSuperAdmin = account.roles.includes("SUPER_ADMIN");
+  if (!isSuperAdmin && input.roles.length === 0) throw new ApiError("VALIDATION", "Pick at least one role");
   const before = account.roles.join(", ");
-  Object.assign(account, input);
-  const after = input.roles.join(", ");
+  // The super admin role stays put; it only moves with transferSuperAdmin().
+  account.name = input.name;
+  account.roles = [...(isSuperAdmin ? (["SUPER_ADMIN"] as const) : []), ...input.roles];
+  const after = account.roles.join(", ");
   audit(db, actor, "staff.update", "Staff", account.email, before === after ? `Renamed to ${input.name}` : `Roles: ${before} → ${after}`);
   return toAccount(account);
+}
+
+/** There's exactly one super admin: they hand the role over, confirm with their password and keep one ordinary role. */
+export function transferSuperAdmin(db: MockDb, actor: StaffUser, id: string, raw: unknown) {
+  requireAdmin(actor);
+  const input = parse(SuperAdminTransferSchema.safeParse(raw));
+  if (id === actor.id) throw new ApiError("SELF", "You're already the super admin");
+  const me = mustAccount(db, actor.id);
+  if (me.password !== input.password) throw new ApiError("INVALID_PASSWORD", "Your password is not right");
+  const target = mustAccount(db, id);
+  if (!target.active) throw new ApiError("INACTIVE", "Reactivate them first");
+  if (!target.lastLoginAt && !target.mfaEnrolled) throw new ApiError("NO_MFA", `${target.name} hasn't signed in yet. They need to sign in once (and set up their authenticator) first.`);
+  me.roles = [input.keepRole, ...me.roles.filter((r) => r !== "SUPER_ADMIN" && r !== input.keepRole)];
+  target.roles = ["SUPER_ADMIN", ...target.roles.filter((r) => r !== "SUPER_ADMIN")];
+  audit(db, actor, "staff.transferSuperAdmin", "Staff", target.email, `Super admin handed from ${me.name} to ${target.name}; ${me.name} keeps ${input.keepRole}`);
+  return toAccount(target);
 }
 
 export function setStaffActive(db: MockDb, actor: StaffUser, id: string, active: boolean) {
   requireAdmin(actor);
   const account = mustAccount(db, id);
   if (!active && id === actor.id) throw new ApiError("SELF", "You can't deactivate your own account");
-  if (!active && account.roles.includes("SUPER_ADMIN")) keepASuperAdmin(db, id);
+  if (!active && account.roles.includes("SUPER_ADMIN")) throw new ApiError("SUPER_ADMIN", "Transfer the super admin role before deactivating this account");
   account.active = active;
   audit(db, actor, active ? "staff.reactivate" : "staff.deactivate", "Staff", account.email, active ? "Account restored" : "Account deactivated and signed out");
   return toAccount(account);

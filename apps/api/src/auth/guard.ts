@@ -3,6 +3,7 @@ import { Reflector } from "@nestjs/core";
 import type { Request } from "express";
 import type { Role } from "@repo/db";
 import { forbidden, unauthenticated } from "../common/errors";
+import { PrismaService } from "../prisma/prisma.service";
 import { verifyAccessToken } from "./crypto";
 
 export type AuthUser = { id: string; roles: Role[] };
@@ -22,7 +23,10 @@ export const CurrentUser = createParamDecorator((_: unknown, ctx: ExecutionConte
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(@Inject(Reflector) private readonly reflector: Reflector) {}
+  constructor(
+    @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+  ) {}
 
   async canActivate(ctx: ExecutionContext) {
     const targets = [ctx.getHandler(), ctx.getClass()];
@@ -34,7 +38,14 @@ export class AuthGuard implements CanActivate {
       try {
         const claims = await verifyAccessToken(token);
         // Staff roles only count on an MFA session (runbook: security checklist).
-        const roles = claims.mfa ? claims.roles : claims.roles.filter((r) => !STAFF_ROLES.includes(r));
+        let roles = claims.mfa ? claims.roles : claims.roles.filter((r) => !STAFF_ROLES.includes(r));
+        // Staff permissions are read fresh, so a deactivation, role change or super admin transfer applies
+        // on the next request rather than when the 15-minute token runs out.
+        if (roles.some((r) => STAFF_ROLES.includes(r))) {
+          const current = await this.prisma.db.user.findUnique({ where: { id: claims.sub }, select: { roles: true, disabledAt: true } });
+          if (!current || current.disabledAt) throw new Error("Staff account no longer active");
+          roles = current.roles;
+        }
         req.user = { id: claims.sub, roles };
       } catch {
         if (!this.reflector.getAllAndOverride<boolean>(PUBLIC, targets)) throw unauthenticated("Your session has expired");

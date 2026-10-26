@@ -1,13 +1,13 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put } from "@nestjs/common";
 import { z } from "zod";
-import { StaffCreateSchema, StaffUpdateSchema } from "@repo/schemas";
+import { StaffCreateSchema, StaffUpdateSchema, SuperAdminTransferSchema } from "@repo/schemas";
 import { parse } from "../common/validate";
 import { CurrentUser, Roles, STAFF_ROLES, type AuthUser } from "../auth/guard";
 import { StaffAccountsService } from "./staff-accounts.service";
 
 const Active = z.object({ active: z.boolean() });
 
-/** Staff accounts. Super admins only, except the directory of active names used by owner pickers. */
+/** Staff accounts. The super admin only, except the directory of active names used by owner pickers. */
 @Controller("admin")
 export class StaffAccountsController {
   constructor(@Inject(StaffAccountsService) private readonly staff: StaffAccountsService) {}
@@ -41,6 +41,13 @@ export class StaffAccountsController {
   @HttpCode(200)
   setActive(@CurrentUser() user: AuthUser, @Param("id") id: string, @Body() body: unknown) {
     return this.staff.setActive(user, id, parse(Active, body).active);
+  }
+
+  @Post("staff/:id/make-super-admin")
+  @Roles("SUPER_ADMIN")
+  @HttpCode(200)
+  transfer(@CurrentUser() user: AuthUser, @Param("id") id: string, @Body() body: unknown) {
+    return this.staff.transfer(user, id, parse(SuperAdminTransferSchema, body));
   }
 
   @Post("staff/:id/reset-password")

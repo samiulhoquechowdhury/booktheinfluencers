@@ -1,13 +1,14 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { hashPassword, type Prisma, type Role, type User } from "@repo/db";
-import type { StaffAccount, StaffCreateInput, StaffUpdateInput, TemporaryPassword } from "@repo/schemas";
+import { hashPassword, verifyPassword, type Prisma, type Role, type User } from "@repo/db";
+import type { StaffAccount, StaffCreateInput, StaffUpdateInput, SuperAdminTransferInput, TemporaryPassword } from "@repo/schemas";
 import { DomainError, forbidden, notFound } from "../common/errors";
 import { STAFF_ROLES, type AuthUser } from "../auth/guard";
 import { newTemporaryPassword } from "../auth/crypto";
 import { PrismaService } from "../prisma/prisma.service";
 
-// Staff accounts (super admins only). Every change is audited; deactivating, resetting a password or an
-// authenticator signs the person out everywhere. Nobody can lock out the last active super admin.
+// Staff accounts (the super admin only). Every change is audited; deactivating, resetting a password or an
+// authenticator signs the person out everywhere. There is exactly one super admin: the role can't be ticked
+// on anyone, only handed over with transfer().
 
 type Tx = Prisma.TransactionClient;
 
@@ -44,12 +45,6 @@ export class StaffAccountsService {
     return target;
   }
 
-  /** Keeps at least one active super admin once `exceptId` loses the role or is deactivated. */
-  private async keepASuperAdmin(tx: Tx, exceptId: string) {
-    const others = await tx.user.count({ where: { id: { not: exceptId }, roles: { has: "SUPER_ADMIN" }, disabledAt: null } });
-    if (others === 0) throw new DomainError("LAST_SUPER_ADMIN", "There must always be at least one active super admin", 409);
-  }
-
   private signOutEverywhere = (tx: Tx, userId: string) => tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
 
   async list(user: AuthUser) {
@@ -71,6 +66,7 @@ export class StaffAccountsService {
     return this.prisma.db.$transaction(async (tx) => {
       const existing = await tx.user.findUnique({ where: { email: input.email } });
       if (existing) throw new DomainError("DUPLICATE", "Someone already uses that email", 409);
+      // input.roles never includes SUPER_ADMIN (AssignableRoleSchema): there's only one, moved by transfer().
       const created = await tx.user.create({ data: { name: input.name, email: input.email, roles: input.roles as Role[], passwordHash, mustChangePassword: true } });
       await this.audit(tx, user, "staff.create", created, `${created.name} added as ${input.roles.join(", ")}`);
       return { ...toAccount(created), temporaryPassword };
@@ -81,17 +77,42 @@ export class StaffAccountsService {
     this.requireAdmin(user);
     return this.prisma.db.$transaction(async (tx) => {
       const target = await this.target(tx, id);
-      const losingAdmin = target.roles.includes("SUPER_ADMIN") && !input.roles.includes("SUPER_ADMIN");
-      if (losingAdmin && id === user.id) throw new DomainError("SELF", "You can't remove your own super admin role", 409);
-      if (losingAdmin) await this.keepASuperAdmin(tx, id);
-      // Non-staff roles (e.g. a staff member who's also a customer) are kept.
-      const others = target.roles.filter((r) => !STAFF_ROLES.includes(r));
-      const updated = await tx.user.update({ where: { id }, data: { name: input.name, roles: [...others, ...(input.roles as Role[])] } });
+      const isSuperAdmin = target.roles.includes("SUPER_ADMIN");
+      if (!isSuperAdmin && input.roles.length === 0) throw new DomainError("VALIDATION", "Pick at least one role");
+      // Non-staff roles (e.g. a staff member who's also a customer) and the super admin role are kept as they are.
+      const kept = target.roles.filter((r) => !STAFF_ROLES.includes(r) || r === "SUPER_ADMIN");
+      const updated = await tx.user.update({ where: { id }, data: { name: input.name, roles: [...kept, ...(input.roles as Role[])] } });
       const before = toAccount(target).roles.join(", ");
-      const after = input.roles.join(", ");
+      const after = toAccount(updated).roles.join(", ");
       await this.audit(tx, user, "staff.update", updated, before === after ? `Renamed to ${input.name}` : `Roles: ${before} → ${after}`);
       return toAccount(updated);
     });
+  }
+
+  /**
+   * Hands the super admin role to another active staff member. The current super admin confirms with
+   * their password, keeps one ordinary role, and is signed out so their new permissions apply at once.
+   */
+  async transfer(user: AuthUser, id: string, input: SuperAdminTransferInput) {
+    this.requireAdmin(user);
+    if (id === user.id) throw new DomainError("SELF", "You're already the super admin", 409);
+    const me = await this.prisma.db.user.findUniqueOrThrow({ where: { id: user.id } });
+    if (!me.passwordHash || !(await verifyPassword(input.password, me.passwordHash))) throw new DomainError("INVALID_PASSWORD", "Your password is not right", 400);
+    return this.prisma.db.$transaction(
+      async (tx) => {
+        const target = await this.target(tx, id);
+        if (target.disabledAt) throw new DomainError("INACTIVE", "Reactivate them first", 409);
+        // Signing in once means they've passed MFA (and, in production, set up an authenticator).
+        if (!target.lastLoginAt && !target.mfaSecret) throw new DomainError("NO_MFA", `${target.name} hasn't signed in yet. They need to sign in once (and set up their authenticator) first.`, 409);
+        const mine = me.roles.filter((r) => r !== "SUPER_ADMIN" && r !== input.keepRole);
+        await tx.user.update({ where: { id: me.id }, data: { roles: [...mine, input.keepRole as Role] } });
+        const updated = await tx.user.update({ where: { id }, data: { roles: [...target.roles.filter((r) => r !== "SUPER_ADMIN"), "SUPER_ADMIN"] } });
+        await this.signOutEverywhere(tx, me.id);
+        await this.audit(tx, user, "staff.transferSuperAdmin", updated, `Super admin handed from ${me.name} to ${updated.name}; ${me.name} keeps ${input.keepRole}`);
+        return toAccount(updated);
+      },
+      { isolationLevel: "Serializable" },
+    );
   }
 
   async setActive(user: AuthUser, id: string, active: boolean) {
@@ -99,7 +120,7 @@ export class StaffAccountsService {
     return this.prisma.db.$transaction(async (tx) => {
       const target = await this.target(tx, id);
       if (!active && id === user.id) throw new DomainError("SELF", "You can't deactivate your own account", 409);
-      if (!active && target.roles.includes("SUPER_ADMIN")) await this.keepASuperAdmin(tx, id);
+      if (!active && target.roles.includes("SUPER_ADMIN")) throw new DomainError("SUPER_ADMIN", "Transfer the super admin role before deactivating this account", 409);
       const updated = await tx.user.update({ where: { id }, data: { disabledAt: active ? null : new Date() } });
       if (!active) await this.signOutEverywhere(tx, id);
       await this.audit(tx, user, active ? "staff.reactivate" : "staff.deactivate", updated, active ? "Account restored" : "Account deactivated and signed out");

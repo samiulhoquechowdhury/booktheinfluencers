@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { STAFF_USERS } from "./internal";
 import { buildSeed } from "./seed";
 import { createHero, deleteHero, listHero, publicHero, updateHero, uploadMedia } from "./site";
-import { changeStaffPassword, createStaff, resetStaffPassword, setStaffActive, staffCodeStep, staffDirectory, staffPasswordStep, updateStaff } from "./staff-accounts";
+import { changeStaffPassword, createStaff, transferSuperAdmin, resetStaffPassword, setStaffActive, staffCodeStep, staffDirectory, staffPasswordStep, updateStaff } from "./staff-accounts";
 import type { MockDb } from "./types";
 
 const admin = STAFF_USERS.find((s) => s.roles.includes("SUPER_ADMIN"))!;
@@ -35,7 +35,20 @@ describe("mock staff accounts", () => {
     const { temporaryPassword } = resetStaffPassword(db, admin, created.id);
     expect(staffPasswordStep(db, "ravi@demo.in", temporaryPassword).staffId).toBe(created.id);
     expect(() => setStaffActive(db, admin, admin.id, false)).toThrow(/your own/);
-    expect(() => updateStaff(db, admin, admin.id, { name: admin.name, roles: ["SALES"] })).toThrow(/your own/);
+    expect(updateStaff(db, admin, admin.id, { name: admin.name, roles: ["SALES"] }).roles).toEqual(["SUPER_ADMIN", "SALES"]);
+    expect(() => createStaff(db, admin, { name: "Boss Two", email: "two@demo.in", roles: ["SUPER_ADMIN"] })).toThrow();
+  });
+});
+
+describe("mock super admin transfer", () => {
+  it("moves the one super admin role and nothing else can grant it", () => {
+    const next = createStaff(db, admin, { name: "Next Boss", email: "next@demo.in", roles: ["SALES"] });
+    expect(() => transferSuperAdmin(db, admin, next.id, { password: "demo1234", keepRole: "OPS" })).toThrow(/signed in/);
+    staffCodeStep(db, next.id, "123456");
+    expect(() => transferSuperAdmin(db, admin, next.id, { password: "nope", keepRole: "OPS" })).toThrow(/password/);
+    transferSuperAdmin(db, admin, next.id, { password: "demo1234", keepRole: "OPS" });
+    expect(db.staffAccounts.filter((a) => a.roles.includes("SUPER_ADMIN")).map((a) => a.email)).toEqual(["next@demo.in"]);
+    expect(db.staffAccounts.find((a) => a.id === admin.id)!.roles).toEqual(["OPS"]);
   });
 });
 

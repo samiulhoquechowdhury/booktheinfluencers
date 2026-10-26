@@ -2,27 +2,29 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, KeyRound, MoreHorizontal, Pencil, Plus, Power, Smartphone } from "lucide-react";
+import { Copy, Crown, KeyRound, LoaderCircle, MoreHorizontal, Pencil, Plus, Power, Smartphone } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { StaffCreateSchema, StaffUpdateSchema, type StaffAccount, type StaffRoleName } from "@repo/schemas";
+import { StaffCreateSchema, StaffUpdateSchema, SuperAdminTransferSchema, type AssignableRole, type StaffAccount, type StaffRoleName } from "@repo/schemas";
 import { formatDateTime } from "@repo/utils";
 import { api, can, errorMessage } from "@/lib/api";
 import { keys, useStaffMutation, useStaffSession } from "@/lib/hooks";
 import { Failure, Loading, Modal, PageHeader, Pill, inputClass } from "@/components/ui";
 
-const ROLES: { value: StaffRoleName; label: string; hint: string }[] = [
-  { value: "SUPER_ADMIN", label: "Super admin", hint: "Everything, including staff, website and audit log" },
+const ROLES: { value: AssignableRole; label: string; hint: string }[] = [
   { value: "SALES", label: "Sales", hint: "Leads, quotes, customer messages" },
   { value: "TALENT_MANAGER", label: "Talent manager", hint: "Roster, rate cards, reps, calendars" },
   { value: "OPS", label: "Operations", hint: "Event day and completion" },
   { value: "ACCOUNTS", label: "Accounts", hint: "Payments, payouts, margins" },
 ];
-const roleLabel = (r: StaffRoleName) => ROLES.find((x) => x.value === r)?.label ?? r;
+const roleLabel = (r: StaffRoleName) => (r === "SUPER_ADMIN" ? "Super admin" : (ROLES.find((x) => x.value === r)?.label ?? r));
 
 type Dialog =
   | { kind: "create" }
   | { kind: "edit"; account: StaffAccount }
   | { kind: "password"; name: string; email: string; password: string }
+  | { kind: "transfer"; account: StaffAccount }
   | null;
 
 export default function StaffPage() {
@@ -43,7 +45,7 @@ export default function StaffPage() {
     <div className="space-y-5">
       <PageHeader
         title="Staff"
-        description={`${active} active ${active === 1 ? "account" : "accounts"}. New staff get a temporary password and set up their authenticator at first sign-in.`}
+        description={`${active} active ${active === 1 ? "account" : "accounts"}. New staff get a temporary password and set up their authenticator at first sign-in. There is one super admin — you — and the role can be handed over, not shared.`}
         actions={
           <button type="button" onClick={() => setDialog({ kind: "create" })} className="btn btn-dark btn-sm">
             <Plus aria-hidden />
@@ -60,7 +62,14 @@ export default function StaffPage() {
           </thead>
           <tbody>
             {rows.map((s) => (
-              <Row key={s.id} account={s} self={s.id === me.id} onEdit={() => setDialog({ kind: "edit", account: s })} onPassword={(password) => setDialog({ kind: "password", name: s.name, email: s.email, password })} />
+              <Row
+                key={s.id}
+                account={s}
+                self={s.id === me.id}
+                onEdit={() => setDialog({ kind: "edit", account: s })}
+                onPassword={(password) => setDialog({ kind: "password", name: s.name, email: s.email, password })}
+                onTransfer={() => setDialog({ kind: "transfer", account: s })}
+              />
             ))}
             {rows.length === 0 && (
               <tr>
@@ -80,11 +89,12 @@ export default function StaffPage() {
       )}
       {dialog?.kind === "edit" && <StaffForm account={dialog.account} self={dialog.account.id === me.id} onClose={() => setDialog(null)} />}
       {dialog?.kind === "password" && <PasswordReveal {...dialog} onClose={() => setDialog(null)} />}
+      {dialog?.kind === "transfer" && <TransferDialog account={dialog.account} onClose={() => setDialog(null)} />}
     </div>
   );
 }
 
-function Row({ account: s, self, onEdit, onPassword }: { account: StaffAccount; self: boolean; onEdit: () => void; onPassword: (password: string) => void }) {
+function Row({ account: s, self, onEdit, onPassword, onTransfer }: { account: StaffAccount; self: boolean; onEdit: () => void; onPassword: (password: string) => void; onTransfer: () => void }) {
   const [menu, setMenu] = useState(false);
   const setActive = useStaffMutation((active: boolean) => api.staff.setActive(s.id, active), s.active ? "Account deactivated" : "Account restored");
   const resetPassword = useStaffMutation(() => api.staff.resetPassword(s.id));
@@ -145,6 +155,9 @@ function Row({ account: s, self, onEdit, onPassword }: { account: StaffAccount; 
                   })
                 }
               />
+              {!self && s.active && (
+                <MenuItem icon={Crown} label="Make super admin…" onClick={() => run(onTransfer)} />
+              )}
               {!self && (
                 <MenuItem
                   icon={Power}
@@ -179,7 +192,8 @@ function MenuItem({ icon: Icon, label, onClick, danger = false }: { icon: typeof
 function StaffForm({ account, self = false, onClose, onCreated }: { account?: StaffAccount; self?: boolean; onClose: () => void; onCreated?: (account: StaffAccount, password: string) => void }) {
   const [name, setName] = useState(account?.name ?? "");
   const [email, setEmail] = useState(account?.email ?? "");
-  const [roles, setRoles] = useState<StaffRoleName[]>(account?.roles ?? ["SALES"]);
+  const isSuperAdmin = Boolean(account?.roles.includes("SUPER_ADMIN"));
+  const [roles, setRoles] = useState<AssignableRole[]>(() => (account?.roles.filter((r): r is AssignableRole => r !== "SUPER_ADMIN") ?? ["SALES"]));
   const [error, setError] = useState("");
   const save = useStaffMutation(async () => {
     if (account) {
@@ -193,7 +207,7 @@ function StaffForm({ account, self = false, onClose, onCreated }: { account?: St
     return api.staff.create(input.data);
   }, account ? "Staff member updated" : undefined);
 
-  const toggle = (role: StaffRoleName) => setRoles((r) => (r.includes(role) ? r.filter((x) => x !== role) : [...r, role]));
+  const toggle = (role: AssignableRole) => setRoles((r) => (r.includes(role) ? r.filter((x) => x !== role) : [...r, role]));
 
   return (
     <Modal title={account ? `Edit ${account.name}` : "Add staff"} onClose={onClose}>
@@ -220,19 +234,22 @@ function StaffForm({ account, self = false, onClose, onCreated }: { account?: St
         </label>
         <fieldset>
           <legend className="text-sm font-medium text-ink">Roles</legend>
+          {isSuperAdmin && (
+            <p className="mt-2 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <Crown className="size-4 shrink-0" aria-hidden />
+              {self ? "You're" : "They're"} the super admin, which already covers every area. To hand it over, use “Make super admin…” on another person.
+            </p>
+          )}
           <div className="mt-2 space-y-2">
-            {ROLES.map((r) => {
-              const locked = self && r.value === "SUPER_ADMIN";
-              return (
-                <label key={r.value} className={`flex items-start gap-3 rounded-lg border p-3 ${roles.includes(r.value) ? "border-gold bg-cream-soft" : "border-line"} ${locked ? "opacity-60" : ""}`}>
-                  <input type="checkbox" checked={roles.includes(r.value)} disabled={locked} onChange={() => toggle(r.value)} className="mt-0.5 size-4 accent-[var(--color-gold-deep)]" />
-                  <span>
-                    <span className="block text-sm font-semibold text-ink">{r.label}</span>
-                    <span className="block text-xs text-muted">{locked ? "You can't remove your own super admin role" : r.hint}</span>
-                  </span>
-                </label>
-              );
-            })}
+            {ROLES.map((r) => (
+              <label key={r.value} className={`flex items-start gap-3 rounded-lg border p-3 ${roles.includes(r.value) ? "border-gold bg-cream-soft" : "border-line"}`}>
+                <input type="checkbox" checked={roles.includes(r.value)} onChange={() => toggle(r.value)} className="mt-0.5 size-4 accent-[var(--color-gold-deep)]" />
+                <span>
+                  <span className="block text-sm font-semibold text-ink">{r.label}</span>
+                  <span className="block text-xs text-muted">{r.hint}</span>
+                </span>
+              </label>
+            ))}
           </div>
         </fieldset>
         {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
@@ -264,6 +281,68 @@ function PasswordReveal({ name, email, password, onClose }: { name: string; emai
         </button>
         <button type="button" onClick={onClose} className="btn btn-dark btn-sm">Done</button>
       </div>
+    </Modal>
+  );
+}
+
+/** Hands the one super admin role to someone else; the current super admin is signed out straight after. */
+function TransferDialog({ account, onClose }: { account: StaffAccount; onClose: () => void }) {
+  const router = useRouter();
+  const client = useQueryClient();
+  const [password, setPassword] = useState("");
+  const [keepRole, setKeepRole] = useState<AssignableRole>("SALES");
+  const [error, setError] = useState("");
+  const transfer = useMutation({
+    mutationFn: async () => {
+      const input = SuperAdminTransferSchema.safeParse({ password, keepRole });
+      if (!input.success) throw new Error(input.error.issues[0]!.message);
+      await api.staff.transfer(account.id, input.data);
+      await api.auth.signOut();
+    },
+    onSuccess: () => {
+      toast.success(`${account.name} is now the super admin. Sign in again to continue.`);
+      client.clear();
+      router.replace("/sign-in");
+    },
+    onError: (err) => setError(err instanceof Error && !("code" in err) ? err.message : errorMessage(err)),
+  });
+
+  return (
+    <Modal title={`Make ${account.name} the super admin`} onClose={onClose}>
+      <form
+        noValidate
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError("");
+          transfer.mutate();
+        }}
+      >
+        <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-semibold">There's only one super admin.</p>
+          <p className="mt-1">
+            {account.name} gets full control, including staff and the website. You lose it straight away and are signed out. Only {account.name} can hand it back.
+          </p>
+        </div>
+        <label className="block text-sm font-medium text-ink">
+          Your role after the handover
+          <select value={keepRole} onChange={(e) => setKeepRole(e.target.value as AssignableRole)} className={`${inputClass} mt-1.5`}>
+            {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label} — {r.hint}</option>)}
+          </select>
+        </label>
+        <label className="block text-sm font-medium text-ink">
+          Your password, to confirm
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus className={`${inputClass} mt-1.5`} />
+        </label>
+        {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={transfer.isPending} className="btn btn-dark disabled:opacity-50">
+            {transfer.isPending && <LoaderCircle className="animate-spin" aria-hidden />}
+            Hand over super admin
+          </button>
+          <button type="button" onClick={onClose} className="btn btn-outline">Cancel</button>
+        </div>
+      </form>
     </Modal>
   );
 }

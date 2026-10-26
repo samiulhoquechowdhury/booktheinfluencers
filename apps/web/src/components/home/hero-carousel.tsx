@@ -20,17 +20,10 @@ const useDemoSlides = () => {
 
 const INTERVAL_MS = 6500;
 
-const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
-const subscribeMotion = (onChange: () => void) => {
-  const query = window.matchMedia(REDUCED_MOTION);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-};
-const useReducedMotion = () => useSyncExternalStore(subscribeMotion, () => window.matchMedia(REDUCED_MOTION).matches, () => false);
 
 /**
- * Cross-fading hero. Advances on its own, pauses while hovered or focused, and stays still
- * for people who ask for reduced motion. All slides share one box, so nothing jumps.
+ * Cross-fading hero that loops forever on its own, pausing while hovered or focused or after the
+ * pause button. With reduced motion it only fades (no slide-up). All slides share one box, so nothing jumps.
  */
 export function HeroCarousel({ slides: served, bundled, ratio, children }: { slides: PublicHeroSlide[]; bundled: StaticImageData; ratio: string; children: ReactNode }) {
   const demo = useDemoSlides();
@@ -38,10 +31,8 @@ export function HeroCarousel({ slides: served, bundled, ratio, children }: { sli
   const [picked, setActive] = useState(0);
   const active = picked % slides.length;
   const [hovered, setHovered] = useState(false);
-  const reducedMotion = useReducedMotion();
-  // null = no choice yet: plays unless the visitor asked for reduced motion.
-  const [paused, setPaused] = useState<boolean | null>(null);
-  const stopped = paused ?? reducedMotion;
+  // Loops forever: last slide → first. Only the pause button (or a hover) holds it still.
+  const [stopped, setPaused] = useState(false);
   const many = slides.length > 1;
 
   useEffect(() => {
@@ -100,7 +91,7 @@ export function HeroCarousel({ slides: served, bundled, ratio, children }: { sli
                     role={many ? "group" : undefined}
                     aria-roledescription={many ? "slide" : undefined}
                     aria-label={many ? `${i + 1} of ${slides.length}` : undefined}
-                    className={`col-start-1 row-start-1 transition-all duration-700 ease-out ${shown ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`}
+                    className={`col-start-1 row-start-1 transition-all duration-700 ease-out ${shown ? "translate-y-0 opacity-100" : "pointer-events-none opacity-0 motion-safe:translate-y-3"}`}
                   >
                     <p className="eyebrow text-warm">{slide.eyebrow}</p>
                     <Heading className="mt-5 font-serif text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-5xl xl:text-6xl">

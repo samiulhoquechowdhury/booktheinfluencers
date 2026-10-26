@@ -17,6 +17,7 @@ import {
   staffDirectory,
   staffPasswordStep,
   toStaffUser,
+  transferSuperAdmin,
   updateStaff,
 } from "@repo/mock/staff-accounts";
 import {
@@ -54,7 +55,7 @@ import {
 } from "@repo/mock/staff";
 import { loadDb, mutate, readStaffId, writeStaffId } from "@repo/mock/store";
 import { addRep, allTalentRecords, createTalent, setRateCard, setRepVerification, setTalentStatus, talentDetail, updateTalent } from "@repo/mock/talent-admin";
-import type { HeroSlideInput, StaffCreateInput, StaffUpdateInput, ProfileStatus, RateCardInput, RepInput, TalentInput, VerificationStatus } from "@repo/schemas";
+import type { HeroSlideInput, StaffCreateInput, StaffUpdateInput, SuperAdminTransferInput, ProfileStatus, RateCardInput, RepInput, TalentInput, VerificationStatus } from "@repo/schemas";
 import type { LeadRec, MockDb, TalentApplicationRec } from "@repo/mock/types";
 
 
@@ -164,6 +165,7 @@ export const mockApi = {
     setActive: (id: string, active: boolean) => call(() => mutate((db) => setStaffActive(db, actor(), id, active))),
     resetPassword: (id: string) => call(() => mutate((db) => resetStaffPassword(db, actor(), id))),
     resetMfa: (id: string) => call(() => mutate((db) => resetStaffMfa(db, actor(), id))),
+    transfer: (id: string, input: SuperAdminTransferInput) => call(() => mutate((db) => transferSuperAdmin(db, actor(), id, input))),
   },
 
   site: {
