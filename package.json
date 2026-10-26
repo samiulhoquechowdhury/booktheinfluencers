@@ -13,7 +13,10 @@
     "test": "turbo run test",
     "format": "prettier --write .",
     "db:up": "docker compose up -d",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @repo/db migrate",
+    "db:seed": "pnpm --filter @repo/db seed",
+    "db:studio": "pnpm --filter @repo/db studio"
   },
   "devDependencies": {
     "prettier": "^3.9.10",

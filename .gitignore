@@ -8,3 +8,6 @@ backups/
 .env*.local
 .DS_Store
 *.tsbuildinfo
+
+# Prisma client, rebuilt from the schema by `pnpm --filter @repo/db generate`
+packages/db/src/generated/

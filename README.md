@@ -21,7 +21,7 @@ Needs Node 22+, pnpm 10 and Docker.
 ```bash
 pnpm install
 cp .env.example .env
-pnpm db:up        # Postgres 16 on :5440, Redis on :6390
+pnpm db:up        # Postgres 16 on :5442, Redis on :6392
 pnpm dev          # runs every app
 pnpm --filter web dev   # or just one
 ```

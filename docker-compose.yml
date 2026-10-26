@@ -1,3 +1,6 @@
+# Own project name and ports: a sibling checkout (../booktheinfluencer) already uses 5440/6390.
+name: talent-booking-dev
+
 services:
   postgres:
     image: postgres:16
@@ -6,7 +9,7 @@ services:
       POSTGRES_PASSWORD: talent
       POSTGRES_DB: talent_dev
     ports:
-      - "5440:5432"
+      - "5442:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,7 +20,7 @@ services:
   redis:
     image: redis:7
     ports:
-      - "6390:6379"
+      - "6392:6379"
 
 volumes:
   pgdata:
