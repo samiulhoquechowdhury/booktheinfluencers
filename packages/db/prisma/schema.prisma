@@ -157,6 +157,7 @@ model Session {
   id               String    @id @default(cuid())
   userId           String
   refreshTokenHash String    @unique // HMAC of the rotating refresh token
+  mfa              Boolean   @default(false) // staff roles only count on MFA sessions
   expiresAt        DateTime
   revokedAt        DateTime?
   createdAt        DateTime  @default(now())

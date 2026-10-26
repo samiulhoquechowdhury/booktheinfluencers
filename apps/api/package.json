@@ -3,24 +3,41 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "build": "tsup src/main.ts --format cjs --target node22 --clean",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
+    "build": "tsup",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm --filter @repo/db generate && tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@nestjs/common": "^11",
     "@nestjs/core": "^11",
     "@nestjs/platform-express": "^11",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "@repo/db": "workspace:*",
+    "@repo/schemas": "workspace:*",
+    "@repo/utils": "workspace:*",
+    "cookie-parser": "^1.4.7",
+    "helmet": "^8.1.0",
+    "jose": "^6.1.0",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2",
     "rxjs": "^7",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@repo/config": "workspace:*",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/express": "^5.0.6",
     "@types/node": "^22",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.4",
     "tsup": "^9.0.0",
     "tsx": "^4.23.15",
-    "typescript": "^5"
-  }
+    "typescript": "^5",
+    "vitest": "^5.0.5"
+  },
+  "type": "module"
 }

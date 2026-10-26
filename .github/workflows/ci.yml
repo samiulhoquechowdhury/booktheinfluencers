@@ -8,6 +8,22 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    services:
+      # API e2e tests run against talent_test (created by apps/api/test/global-setup.ts).
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: talent
+          POSTGRES_PASSWORD: talent
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U talent"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://talent:talent@localhost:5432/talent_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
