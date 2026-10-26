@@ -1,12 +1,11 @@
 "use client";
 
 import { useSyncExternalStore, type ReactNode } from "react";
-import { CalendarDays, ChevronDown, MapPin, Search, Sparkles, Wallet } from "lucide-react";
+import { CalendarDays, ChevronDown, MapPin, Search, Wallet } from "lucide-react";
 import { toIstDateKey } from "@repo/utils";
-import { BUDGET_BANDS, CITIES, EVENT_TYPES } from "@repo/mock/catalogue/data";
+import { BUDGET_BANDS, CITIES } from "@repo/mock/catalogue/data";
 
 const noop = () => () => {};
-const POPULAR_OCCASIONS = EVENT_TYPES.filter((t) => ["Wedding", "Corporate event", "Sangeet", "College festival", "Brand launch"].includes(t));
 
 const control = "w-full min-w-0 appearance-none bg-transparent font-display text-[0.95rem] font-medium text-ink outline-none placeholder:font-normal placeholder:text-muted";
 
@@ -55,22 +54,6 @@ export function SearchBar() {
         </div>
       </form>
 
-      {/* Occasions, not categories: the category row sits right below this. */}
-      <nav aria-label="Popular occasions" className="mt-4 flex flex-wrap items-center gap-2 px-1">
-        <span className="flex items-center gap-1.5 font-display text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-          <Sparkles className="size-3.5 text-gold-deep" aria-hidden />
-          Popular for
-        </span>
-        {POPULAR_OCCASIONS.map((occasion) => (
-          <a
-            key={occasion}
-            href={`/talent?eventType=${encodeURIComponent(occasion)}`}
-            className="rounded-full border border-line bg-white px-3.5 py-1.5 font-display text-sm text-ink-soft transition-colors hover:border-gold hover:bg-cream-soft hover:text-ink"
-          >
-            {occasion}
-          </a>
-        ))}
-      </nav>
     </div>
   );
 }
