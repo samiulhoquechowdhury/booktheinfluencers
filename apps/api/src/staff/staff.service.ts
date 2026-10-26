@@ -5,6 +5,7 @@ import { DomainError, forbidden, notFound } from "../common/errors";
 import type { AuthUser } from "../auth/guard";
 import { PrismaService } from "../prisma/prisma.service";
 import { activity, evaluateConfirmation, transitionLead } from "../bookings/domain";
+import { notifyCustomer, notifyStaff } from "@repo/db";
 
 type Tx = Prisma.TransactionClient;
 
@@ -134,6 +135,7 @@ export class StaffService {
         throw notFound("Lead");
       });
       await activity(tx, lead.id, `${owner.name} is your booking manager`, "They'll keep you posted at every step.");
+      await notifyStaff(tx, owner.id, { event: "lead.assigned", subject: `New lead ${lead.ref}`, body: `${lead.ref} (${lead.eventType}, ${lead.city}) is assigned to you.`, leadId: lead.id });
       await this.audit(tx, user, "lead.assign", "Lead", lead.ref, `Owner → ${owner.name}`);
     });
   }
@@ -229,6 +231,7 @@ export class StaffService {
           if (booking.contracts.length > 0) throw invalid("Contract already sent");
           await tx.contract.create({ data: { bookingId, status: "SENT", sentAt: new Date() } });
           await activity(tx, leadId, `Contract sent for ${name}`, "Review and sign it online.");
+          await notifyCustomer(tx, leadId, { event: "contract.sent", subject: "Your contract is ready to sign", body: `The contract for ${name} is ready. Sign it from your booking page.` });
           break;
         }
         case "completeEvent": {
@@ -369,6 +372,7 @@ export class StaffService {
   private async publishQuote(tx: Tx, leadId: string, stage: LeadStage, version: number, talentName: string, actorId: string) {
     if (stage === "AVAILABILITY_CHECK" || stage === "NEGOTIATION") await transitionLead(tx, leadId, "QUOTE_SENT", { actorId });
     await activity(tx, leadId, `Quote v${version} ready for ${talentName}`, "Review the itemised quote and accept it online.");
+    await notifyCustomer(tx, leadId, { event: "quote.sent", subject: "Your quote is ready", body: `Your quote for ${talentName} is ready to review.` });
   }
 
   async approveQuote(user: AuthUser, quoteId: string) {
@@ -425,6 +429,7 @@ export class StaffService {
       if (m.status !== "PENDING" && m.status !== "OVERDUE") throw new DomainError("INVALID", "A link was already sent or it's paid", 409);
       await tx.paymentMilestone.update({ where: { id: milestoneId }, data: { status: "LINK_SENT" } });
       await activity(tx, m.booking.leadId, `Payment link sent: ${m.label}`, "Pay from your booking page whenever you're ready.");
+      await notifyCustomer(tx, m.booking.leadId, { event: "payment.link", subject: "Payment link", body: `Your ${m.label.toLowerCase()} payment is ready. Pay from your booking page.` });
       await this.audit(tx, user, "payment.link", "Milestone", m.booking.lead.ref, `${m.label} link sent`);
     });
   }
@@ -441,6 +446,7 @@ export class StaffService {
       await tx.payment.create({ data: { milestoneId, method: "bank_transfer", gatewayPaymentId: reference, amountPaise: m.amountPaise, status: "captured", receivedAt: new Date() } });
       await tx.paymentMilestone.update({ where: { id: milestoneId }, data: { status: "PAID", paidAt: new Date() } });
       await activity(tx, m.booking.leadId, `${m.label} payment received`, `Bank transfer ref ${reference}.`);
+      await notifyCustomer(tx, m.booking.leadId, { event: "payment.received", subject: "Payment received", body: `We received your ${m.label.toLowerCase()} payment. Thank you!` });
       await this.audit(tx, user, "payment.manual", "Milestone", m.booking.lead.ref, `${m.label} marked paid (UTR ${reference})`);
       await evaluateConfirmation(tx, m.bookingId);
     });

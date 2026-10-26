@@ -7,6 +7,7 @@ import { CurrentUser, Roles, type AuthUser } from "../auth/guard";
 import { PrismaService } from "../prisma/prisma.service";
 import { customerLeadInclude, toCustomerLead } from "./customer-serializer";
 import { activity, createMilestones, evaluateConfirmation, nextRef, transitionLead } from "./domain";
+import { notifyCustomer } from "@repo/db";
 
 const BUDGETS: Record<string, { min: bigint | null; max: bigint | null }> = {
   "under-1l": { min: null, max: 10_000_000n },
@@ -57,6 +58,7 @@ export class CustomerBookingsController {
         },
       });
       await activity(tx, lead.id, "Enquiry received", `Reference ${ref}. Our team will call you to go through the brief.`);
+      await notifyCustomer(tx, lead.id, { event: "enquiry.received", subject: "We have your brief", body: "Thanks for your brief. A booking manager will call you shortly." });
       const account = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
       if (account.name === "Guest" || (!account.email && input.email)) {
         await tx.user.update({ where: { id: user.id }, data: { name: account.name === "Guest" ? input.contactName : account.name, email: account.email ?? (input.email || null) } });

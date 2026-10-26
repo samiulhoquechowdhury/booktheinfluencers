@@ -6,7 +6,7 @@
     "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
     "build": "tsup",
     "start": "node dist/main.js",
-    "typecheck": "pnpm --filter @repo/db generate && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {

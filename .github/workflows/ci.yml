@@ -32,5 +32,4 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @repo/db generate
       - run: pnpm turbo run lint typecheck test build

@@ -177,6 +177,13 @@ describe("booking flow", () => {
     expect(confirmed.sellingTotalPaise).toBe(28_541_250n);
     expect(confirmed.marginPaise).toBe(6_187_500n);
 
+    // NOT-1 / NOT-3 / NOT-4 / NOT-5 went into the outbox with the events, free of internal figures.
+    const outbox = await db.notification.findMany({ where: { leadId: lead.id }, orderBy: { createdAt: "asc" } });
+    expect(outbox.map((n) => n.event)).toEqual(expect.arrayContaining(["enquiry.received", "payment.received", "contract.signed", "booking.confirmed"]));
+    expect(outbox.every((n) => n.status === "PENDING")).toBe(true);
+    expect(outbox.find((n) => n.event === "enquiry.received")).toMatchObject({ channel: "SMS", to: expect.stringMatching(/^\d{10}$/) });
+    for (const n of outbox) expect(n.body).not.toMatch(/margin|payout|internal/i);
+
     const after = await http().get(`/v1/me/leads/${lead.id}`).set(auth).expect(200);
     expect(after.body.bookings[0].milestones[0]).toMatchObject({ status: "PAID", paymentRef: `pay_${booking.id}` });
     expect(after.body.timeline.map((t: { title: string }) => t.title)).toContain("Kabir Malhotra is confirmed");

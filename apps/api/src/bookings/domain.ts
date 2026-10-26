@@ -1,6 +1,7 @@
 import type { LeadStage, Prisma } from "@repo/db";
 import { canTransition, isConfirmable, splitIntoMilestones } from "@repo/utils";
 import { DomainError, notFound } from "../common/errors";
+import { notifyCustomer, notifyTalent } from "@repo/db";
 
 // Booking rules shared by customer, staff and webhook flows. Always called inside a transaction
 // (rules.md §3): `tx` is the transaction client.
@@ -75,6 +76,8 @@ export async function evaluateConfirmation(tx: Tx, bookingId: string) {
   });
   if (booking.lead.stage === "ADVANCE_PENDING") await transitionLead(tx, booking.leadId, "CONFIRMED", { actor: "system" });
   await activity(tx, booking.leadId, `${booking.talent.stageName} is confirmed`, "Contract signed, advance received and the artist's team has accepted.");
+  await notifyCustomer(tx, booking.leadId, { event: "booking.confirmed", subject: "Your booking is confirmed", body: `${booking.talent.stageName} is confirmed for your event.` });
+  await notifyTalent(tx, booking.id, { event: "booking.confirmed", subject: "Booking confirmed", body: `Booking confirmed: ${booking.lead.eventType} in ${booking.lead.city} on ${booking.lead.eventDate}.` });
 }
 
 const DAY = 86_400_000;
@@ -123,6 +126,7 @@ export async function applyGatewayEvent(
   });
   await tx.paymentMilestone.update({ where: { id: milestone.id }, data: { status: "PAID", paidAt: new Date() } });
   await activity(tx, milestone.booking.leadId, `${milestone.label} payment received`, `Payment ref ${event.gatewayPaymentId}.`);
+  await notifyCustomer(tx, milestone.booking.leadId, { event: "payment.received", subject: "Payment received", body: `We received your ${milestone.label.toLowerCase()} payment. Thank you!` });
   await evaluateConfirmation(tx, milestone.bookingId);
   await done();
   return { duplicate: false, applied: true };
@@ -135,6 +139,7 @@ export async function applyEsignEvent(tx: Tx, event: { eventId: string; contract
   if (contract && contract.status !== "SIGNED" && contract.status !== "VOID") {
     await tx.contract.update({ where: { id: contract.id }, data: { status: "SIGNED", signedAt: new Date(), signedName: event.signedName } });
     await activity(tx, contract.booking.leadId, "Contract signed", `Signed by ${event.signedName}.`);
+    await notifyCustomer(tx, contract.booking.leadId, { event: "contract.signed", subject: "Contract signed", body: "Your signed contract is saved on your booking page." });
     await evaluateConfirmation(tx, contract.bookingId);
   }
   await tx.webhookEvent.update({ where: { id: event.eventId }, data: { processedAt: new Date() } });
