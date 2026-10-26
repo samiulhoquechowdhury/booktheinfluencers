@@ -9,7 +9,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Plus, Search, X } from "lucide-react";
 import { EnquiryInputSchema, type EnquiryFormValues, type EnquiryInput } from "@repo/schemas";
 import { toIstDateKey } from "@repo/utils";
-import { BUDGET_BANDS, CITIES, EVENT_TYPES, LANGUAGES, TALENTS } from "@/lib/catalogue/data";
+import { BUDGET_BANDS, CITIES, EVENT_TYPES, LANGUAGES, TALENTS } from "@repo/mock/catalogue/data";
 import { api, errorMessage } from "@/lib/api/client";
 import { keys, useSession } from "@/lib/api/hooks";
 import { feeBand } from "@/lib/format";

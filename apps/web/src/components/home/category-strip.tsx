@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CATEGORIES } from "@/lib/catalogue/data";
+import { CATEGORIES } from "@repo/mock/catalogue/data";
 import { CategoryIcon } from "@/components/category-icon";
 
 export function CategoryStrip() {

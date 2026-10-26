@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, GitCompareArrows, X } from "lucide-react";
-import { getTalent } from "@/lib/catalogue/query";
+import { getTalent } from "@repo/mock/catalogue/query";
 import { useCompareList } from "@/lib/compare";
 import { REPRESENTATION_LABELS, ctaLabel, enquiryHref, feeBand } from "@/lib/format";
 import { EmptyState } from "@/components/ui/feedback";

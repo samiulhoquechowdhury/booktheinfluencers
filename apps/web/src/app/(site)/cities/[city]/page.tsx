@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { CITIES } from "@/lib/catalogue/data";
-import { getCity, parseFilters } from "@/lib/catalogue/query";
+import { CITIES } from "@repo/mock/catalogue/data";
+import { getCity, parseFilters } from "@repo/mock/catalogue/query";
 import { PageIntro, Spinner } from "@/components/ui/feedback";
 import { TalentListing } from "@/components/talent/talent-listing";
 

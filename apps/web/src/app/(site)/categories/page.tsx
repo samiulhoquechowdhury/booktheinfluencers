@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { CATEGORIES, CITIES, TALENTS } from "@/lib/catalogue/data";
+import { CATEGORIES, CITIES, TALENTS } from "@repo/mock/catalogue/data";
 import { CategoryIcon } from "@/components/category-icon";
 import { PageIntro } from "@/components/ui/feedback";
 

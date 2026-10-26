@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, SearchX } from "lucide-react";
 import { formatDate } from "@repo/utils";
-import { BUDGET_BANDS, CATEGORIES, CITIES } from "@/lib/catalogue/data";
-import { searchTalents, type TalentFilters } from "@/lib/catalogue/query";
-import { filtersToQuery, type LockedFilters as Locked } from "@/lib/catalogue/query-string";
+import { BUDGET_BANDS, CATEGORIES, CITIES } from "@repo/mock/catalogue/data";
+import { searchTalents, type TalentFilters } from "@repo/mock/catalogue/query";
+import { filtersToQuery, type LockedFilters as Locked } from "@repo/mock/catalogue/query-string";
 import { EmptyState } from "@/components/ui/feedback";
 import { TalentCard } from "./talent-card";
 import { SortSelect, TalentFiltersPanel } from "./talent-filters";

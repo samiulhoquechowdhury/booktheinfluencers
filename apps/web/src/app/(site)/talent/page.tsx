@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { parseFilters } from "@/lib/catalogue/query";
+import { parseFilters } from "@repo/mock/catalogue/query";
 import { PageIntro, Spinner } from "@/components/ui/feedback";
 import { TalentListing } from "@/components/talent/talent-listing";
 

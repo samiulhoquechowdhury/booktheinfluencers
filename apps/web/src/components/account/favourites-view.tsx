@@ -1,7 +1,7 @@
 "use client";
 
 import { Heart } from "lucide-react";
-import { getTalentSummaries } from "@/lib/catalogue/query";
+import { getTalentSummaries } from "@repo/mock/catalogue/query";
 import { errorMessage } from "@/lib/api/client";
 import { useFavourites } from "@/lib/api/hooks";
 import { enquiryHref } from "@/lib/format";

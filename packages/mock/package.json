@@ -1,0 +1,24 @@
+{
+  "name": "@repo/mock",
+  "version": "0.0.0",
+  "private": true,
+  "description": "In-browser mock of the booking API: catalogue, rules, store and serializers. Shared by web and admin until apps/api is wired in.",
+  "exports": {
+    "./catalogue/*": "./src/catalogue/*.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@repo/schemas": "workspace:*",
+    "@repo/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/config": "workspace:*",
+    "@types/node": "^22",
+    "typescript": "^5",
+    "vitest": "^5.0.5"
+  }
+}

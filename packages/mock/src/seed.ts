@@ -17,7 +17,7 @@ import {
   postLeadMessage,
 } from "./server";
 import type { MockDb } from "./types";
-import { TALENTS } from "@/lib/catalogue/data";
+import { TALENTS } from "./catalogue/data";
 
 // Demo data built by running the real mock flows, so every seeded record obeys the same rules
 // (including CONFIRMED, which only the confirmation rule can set).
@@ -104,6 +104,7 @@ export function buildSeed(): MockDb {
     talentApplications: [],
     newsletter: [],
     notificationsSeenAt: {},
+    audit: [],
   };
 
   // 1. Corporate show — fully confirmed, balance still due.

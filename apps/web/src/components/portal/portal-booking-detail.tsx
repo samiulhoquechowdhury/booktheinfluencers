@@ -7,7 +7,7 @@ import { api, errorMessage } from "@/lib/api/client";
 import { keys, useTalentBooking, useTalentMessages } from "@/lib/api/hooks";
 import { talentStatus } from "@/lib/booking-status";
 import { durationLabel, inr } from "@/lib/format";
-import { ACCOUNT_MANAGER } from "@/lib/mock/internal";
+import { ACCOUNT_MANAGER } from "@repo/mock/internal";
 import { MessageThread } from "@/components/messages/message-thread";
 import { ErrorState, Spinner } from "@/components/ui/feedback";
 import { StatusPill } from "@/components/ui/status-pill";

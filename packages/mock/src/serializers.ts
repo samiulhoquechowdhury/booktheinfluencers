@@ -4,7 +4,7 @@ import {
   type CustomerLead,
   type TalentBooking,
 } from "@repo/schemas";
-import { TALENTS } from "@/lib/catalogue/data";
+import { TALENTS } from "./catalogue/data";
 import { ACCOUNT_MANAGER } from "./internal";
 import { bookingsOf, contractOf, milestonesOf, quotesOf } from "./server";
 import type { BookingRec, LeadRec, MockDb } from "./types";

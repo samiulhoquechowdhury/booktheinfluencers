@@ -162,6 +162,19 @@ export type MockDb = {
   newsletter: { email: string; at: string }[];
   /** Per user: when they last opened their notifications. */
   notificationsSeenAt: Record<string, string>;
+  /** AUD-1..3: staff mutations, newest last. */
+  audit: AuditRec[];
+};
+
+export type AuditRec = {
+  id: string;
+  at: string;
+  actorId: string;
+  actorName: string;
+  action: string;
+  entity: string;
+  entityId: string;
+  summary: string;
 };
 
 /** CUS-3: a thread per lead (customer ↔ manager) or per booking (talent ↔ team). */

@@ -3,9 +3,9 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
-import { BUDGET_BANDS, CATEGORIES, CITIES, EVENT_TYPES, LANGUAGES } from "@/lib/catalogue/data";
-import { SORTS, type TalentFilters } from "@/lib/catalogue/query";
-import { filtersToQuery, type LockedFilters as Locked } from "@/lib/catalogue/query-string";
+import { BUDGET_BANDS, CATEGORIES, CITIES, EVENT_TYPES, LANGUAGES } from "@repo/mock/catalogue/data";
+import { SORTS, type TalentFilters } from "@repo/mock/catalogue/query";
+import { filtersToQuery, type LockedFilters as Locked } from "@repo/mock/catalogue/query-string";
 
 const selectClass =
   "w-full rounded-md border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-gold";

@@ -1,5 +1,5 @@
 import { Disc3, Drama, MicVocal, Presentation, Sparkles, type LucideProps } from "lucide-react";
-import type { CATEGORIES } from "@/lib/catalogue/data";
+import type { CATEGORIES } from "@repo/mock/catalogue/data";
 
 const ICONS = { MicVocal, Disc3, Drama, Presentation, Sparkles };
 

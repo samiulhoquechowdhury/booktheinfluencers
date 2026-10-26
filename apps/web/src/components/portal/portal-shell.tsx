@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { getTalent } from "@/lib/catalogue/query";
+import { getTalent } from "@repo/mock/catalogue/query";
 import type { Session } from "@/lib/api/client";
 import { RequireSession } from "@/components/auth/require-session";
 

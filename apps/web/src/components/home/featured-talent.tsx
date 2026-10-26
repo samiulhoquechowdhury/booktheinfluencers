@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { featuredTalents } from "@/lib/catalogue/query";
+import { featuredTalents } from "@repo/mock/catalogue/query";
 import { TalentCard } from "@/components/talent/talent-card";
 import { SectionHeading } from "./section-heading";
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, LoaderCircle, Send } from "lucide-react";
-import { CATEGORIES, CITIES } from "@/lib/catalogue/data";
+import { CATEGORIES, CITIES } from "@repo/mock/catalogue/data";
 import { api, errorMessage } from "@/lib/api/client";
 
 const REPRESENTATION = ["I manage my own bookings", "An agency or manager represents me", "I'm an agency applying for an artist"];

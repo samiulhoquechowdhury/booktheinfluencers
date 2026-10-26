@@ -6,7 +6,7 @@ import { ArrowRight, LoaderCircle } from "lucide-react";
 import { INDIAN_MOBILE } from "@repo/schemas";
 import { api, errorMessage, type Session } from "@/lib/api/client";
 import { keys } from "@/lib/api/hooks";
-import { DEMO_OTP } from "@/lib/mock/internal";
+import { DEMO_OTP } from "@repo/mock/internal";
 
 const inputClass =
   "w-full rounded-md border border-line bg-white px-4 py-3 text-ink outline-none transition-colors focus:border-gold aria-[invalid=true]:border-rose-400";

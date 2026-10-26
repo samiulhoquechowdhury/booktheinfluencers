@@ -1,12 +1,15 @@
 @import "tailwindcss";
 @import "@repo/ui/tokens.css";
+@import "@repo/ui/components.css";
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-geist-sans);
+  --font-display: var(--font-geist-sans);
 }
 
 body {
-  background: var(--background);
+  background: var(--cream-soft);
   color: var(--foreground);
 }

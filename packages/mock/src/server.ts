@@ -7,7 +7,7 @@ import {
   toIstDateKey,
   type LeadStage,
 } from "@repo/utils";
-import { BUDGET_BANDS, TALENTS } from "@/lib/catalogue/data";
+import { BUDGET_BANDS, TALENTS } from "./catalogue/data";
 import { ACCOUNT_MANAGER, internalFor } from "./internal";
 import type { BookingRec, LeadRec, MilestoneRec, MockDb, QuoteLineRec, QuoteRec } from "./types";
 

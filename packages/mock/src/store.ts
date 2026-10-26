@@ -7,6 +7,21 @@ const SESSION_KEY = "btf.mock.session.v1";
 
 let memory: MockDb | null = null;
 
+/**
+ * Another tab (e.g. /admin) wrote the store: drop the cached copy and tell the caller,
+ * so open pages refetch. Returns an unsubscribe function.
+ */
+export function onExternalChange(callback: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const listener = (event: StorageEvent) => {
+    if (event.key !== null && event.key !== DB_KEY) return;
+    memory = null;
+    callback();
+  };
+  window.addEventListener("storage", listener);
+  return () => window.removeEventListener("storage", listener);
+}
+
 function storage(): Storage | null {
   try {
     return typeof window === "undefined" ? null : window.localStorage;
@@ -22,6 +37,7 @@ function upgrade(db: MockDb): MockDb {
   db.talentApplications ??= [];
   db.newsletter ??= [];
   db.notificationsSeenAt ??= {};
+  db.audit ??= [];
   return db;
 }
 
@@ -62,6 +78,18 @@ export function resetDb() {
   memory = null;
   storage()?.removeItem(DB_KEY);
   storage()?.removeItem(SESSION_KEY);
+}
+
+/** Staff sessions are separate from customer/talent ones (admin is its own app). */
+const STAFF_SESSION_KEY = "btf.mock.staff.v1";
+
+export function readStaffId(): string | null {
+  return storage()?.getItem(STAFF_SESSION_KEY) ?? null;
+}
+
+export function writeStaffId(staffId: string | null) {
+  if (staffId) storage()?.setItem(STAFF_SESSION_KEY, staffId);
+  else storage()?.removeItem(STAFF_SESSION_KEY);
 }
 
 export function readSessionUserId(): string | null {

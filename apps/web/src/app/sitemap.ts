@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { CATEGORIES, CITIES, TALENTS } from "@/lib/catalogue/data";
+import { CATEGORIES, CITIES, TALENTS } from "@repo/mock/catalogue/data";
 import { SITE_URL } from "@/lib/site";
 
 /** NFR-9 / CAT-10: public pages only. */

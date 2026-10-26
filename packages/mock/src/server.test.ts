@@ -43,6 +43,7 @@ function emptyDb(): MockDb {
     talentApplications: [],
     newsletter: [],
     notificationsSeenAt: {},
+    audit: [],
   };
 }
 

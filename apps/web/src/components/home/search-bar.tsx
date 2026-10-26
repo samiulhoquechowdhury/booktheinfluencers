@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react";
-import { BUDGET_BANDS, CITIES } from "@/lib/catalogue/data";
+import { BUDGET_BANDS, CITIES } from "@repo/mock/catalogue/data";
 
 const fieldClass =
   "w-full bg-transparent font-display text-sm text-ink outline-none placeholder:text-muted";

@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { DEMO_CUSTOMER_PHONE, TALENT_LOGINS } from "@/lib/mock/internal";
+import { DEMO_CUSTOMER_PHONE, TALENT_LOGINS } from "@repo/mock/internal";
 import { OtpForm } from "./otp-form";
 
 /** Only same-site paths are honoured as a redirect target. */

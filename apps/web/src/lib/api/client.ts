@@ -1,8 +1,8 @@
 "use client";
 
 import { EnquiryInputSchema, INDIAN_MOBILE, type EnquiryFormValues } from "@repo/schemas";
-import { BLACKOUT_SEED } from "@/lib/catalogue/blackouts";
-import { ACCOUNT_MANAGER, DEMO_OTP, TALENT_LOGINS } from "@/lib/mock/internal";
+import { BLACKOUT_SEED } from "@repo/mock/catalogue/blackouts";
+import { ACCOUNT_MANAGER, DEMO_OTP, TALENT_LOGINS } from "@repo/mock/internal";
 import {
   ApiError,
   acceptQuote,
@@ -25,10 +25,10 @@ import {
   talentBlackouts,
   talentMessages,
   type DemoAction,
-} from "@/lib/mock/server";
-import { toCustomerLead, toTalentBooking } from "@/lib/mock/serializers";
-import { loadDb, mutate, readSessionUserId, resetDb, writeSessionUserId } from "@/lib/mock/store";
-import type { MessageRec, MockDb, UserRec } from "@/lib/mock/types";
+} from "@repo/mock/server";
+import { toCustomerLead, toTalentBooking } from "@repo/mock/serializers";
+import { loadDb, mutate, readSessionUserId, resetDb, writeSessionUserId } from "@repo/mock/store";
+import type { MessageRec, MockDb, UserRec } from "@repo/mock/types";
 
 // Typed API for the web app. Today it talks to the in-browser mock; the same functions will call
 // the NestJS API (/v1) when NEXT_PUBLIC_API_BASE is set — components don't change.

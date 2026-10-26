@@ -5,7 +5,7 @@ import { FlaskConical } from "lucide-react";
 import type { CustomerBooking } from "@repo/schemas";
 import { api } from "@/lib/api/client";
 import { useBookingMutation } from "@/lib/api/hooks";
-import type { DemoAction } from "@/lib/mock/server";
+import type { DemoAction } from "@repo/mock/server";
 
 const ACTIONS: { action: DemoAction; label: string; show: (b: CustomerBooking) => boolean; needsNote?: string }[] = [
   { action: "startAvailabilityCheck", label: "Start availability check", show: (b) => b.availability === "NOT_CHECKED" },

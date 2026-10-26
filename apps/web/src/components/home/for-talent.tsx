@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { ArrowRight, CalendarCheck, FilePenLine, ListFilter, Wallet } from "lucide-react";
-import { IMAGES } from "@/lib/catalogue/data";
+import { IMAGES } from "@repo/mock/catalogue/data";
 
 const FEATURES = [
   { icon: ListFilter, title: "Qualified enquiries", body: "Briefs arrive with date, city, audience and budget." },
