@@ -25,7 +25,7 @@ const INTERVAL_MS = 6500;
  * Cross-fading hero that loops forever on its own, pausing while hovered or focused or after the
  * pause button. With reduced motion it only fades (no slide-up). All slides share one box, so nothing jumps.
  */
-export function HeroCarousel({ slides: served, bundled, ratio, children }: { slides: PublicHeroSlide[]; bundled: StaticImageData; ratio: string; children: ReactNode }) {
+export function HeroCarousel({ slides: served, bundled, children }: { slides: PublicHeroSlide[]; bundled: StaticImageData; children: ReactNode }) {
   const demo = useDemoSlides();
   const slides = demo?.length ? demo : served;
   const [picked, setActive] = useState(0);
@@ -50,11 +50,8 @@ export function HeroCarousel({ slides: served, bundled, ratio, children }: { sli
       onFocus={() => setHovered(true)}
       onBlur={() => setHovered(false)}
     >
-      {/*
-        The box keeps the photos' own aspect ratio, so the whole image is always visible.
-        Phones: full-width banner above the text. Desktop: right-aligned, text on the dark left.
-      */}
-      <div className="relative lg:absolute lg:right-0 lg:top-0 lg:w-[70%]" style={{ aspectRatio: ratio }}>
+      {/* Full-bleed background: every photo covers the whole hero, centred, under an even tint for the text. */}
+      <div className="absolute inset-0 -z-10 overflow-hidden">
         {slides.map((slide, i) => (
           <Image
             key={slide.id}
@@ -66,18 +63,20 @@ export function HeroCarousel({ slides: served, bundled, ratio, children }: { sli
             // Uploaded photos are already resized by the CRM and served with long-lived caching.
             unoptimized={slide.imageUrl !== BUNDLED_PATH}
             placeholder={slide.imageUrl === BUNDLED_PATH ? "blur" : "empty"}
-            sizes="(min-width: 1024px) 70vw, 100vw"
-            className={`-z-20 object-cover transition-opacity duration-1000 ease-out ${i === active ? "opacity-100" : "opacity-0"}`}
+            sizes="100vw"
+            className={`object-cover object-center transition-opacity duration-1000 ease-out ${i === active ? "opacity-100" : "opacity-0"}`}
           />
         ))}
-        <div aria-hidden className="absolute inset-0 -z-10 hidden bg-gradient-to-r from-ink to-transparent to-30% lg:block" />
-        <div aria-hidden className="absolute inset-x-0 bottom-0 -z-10 h-16 bg-gradient-to-t from-ink lg:h-24" />
+        {/* Readable text on any photo: a light tint everywhere, a little deeper behind the copy and at the bottom. */}
+        <div aria-hidden className="absolute inset-0 bg-ink/45" />
+        <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-ink/55 via-ink/15 to-transparent" />
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-ink to-transparent" />
       </div>
 
-      {/* At least as tall as the desktop photo (70% width × its aspect ratio); grows if the text needs more. */}
-      <div className="lg:flex lg:min-h-[calc(70vw*941/1672)] lg:items-center">
-        <div className="shell pb-24 pt-8 lg:py-16">
-          <div className="max-w-xl lg:max-w-md xl:max-w-xl">
+      {/* As tall as a 16:9 photo at full width (capped), so the picture shows whole on desktop. */}
+      <div className="flex min-h-[560px] items-center sm:min-h-[620px] lg:min-h-[min(56.25vw,860px)]">
+        <div className="shell w-full pb-28 pt-16 lg:py-24">
+          <div className="max-w-xl [text-shadow:0_1px_14px_rgb(0_0_0/0.35)] xl:max-w-2xl">
             {/* Every slide's text sits in the same grid cell, so the block is as tall as the longest one. */}
             <div className="grid" aria-live={stopped || hovered ? "polite" : "off"}>
               {slides.map((slide, i) => {
@@ -98,7 +97,7 @@ export function HeroCarousel({ slides: served, bundled, ratio, children }: { sli
                       {slide.title}
                       <span className="block italic text-warm">{slide.accent}</span>
                     </Heading>
-                    <p className="mt-6 max-w-lg text-base leading-relaxed text-white/80 sm:text-lg lg:max-w-md">{slide.body}</p>
+                    <p className="mt-6 max-w-lg text-base leading-relaxed text-white/85 sm:text-lg">{slide.body}</p>
                     <div className="mt-8 flex flex-wrap gap-4 xl:mt-9">
                       <a href={slide.ctaHref} className="btn btn-gold">
                         {slide.ctaLabel}

@@ -10,9 +10,11 @@ export function CtaBand() {
         alt=""
         fill
         sizes="100vw"
-        className="-z-20 object-cover"
+        className="-z-20 object-cover object-center"
       />
-      <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-ink via-ink/90 to-ink/60" />
+      {/* An even tint across the whole photo (not a dark left side), slightly deeper at the bottom. */}
+      <div aria-hidden className="absolute inset-0 -z-10 bg-ink/60" />
+      <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-ink/50 to-transparent" />
 
       <div className="shell flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
         <div className="max-w-xl">
