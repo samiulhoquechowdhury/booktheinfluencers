@@ -2,16 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Plus, Search, X } from "lucide-react";
 import { EnquiryInputSchema, type EnquiryFormValues, type EnquiryInput } from "@repo/schemas";
 import { toIstDateKey } from "@repo/utils";
-import { BUDGET_BANDS, CITIES, EVENT_TYPES, LANGUAGES, TALENTS } from "@repo/mock/catalogue/data";
+import { BUDGET_BANDS, CITIES, EVENT_TYPES, LANGUAGES } from "@repo/mock/catalogue/data";
 import { api, errorMessage } from "@/lib/api/client";
-import { keys, useSession } from "@/lib/api/hooks";
+import { keys, useSession, useTalentSearch, useTalentSummaries } from "@/lib/api/hooks";
 import { feeBand } from "@/lib/format";
 import { OtpForm } from "@/components/auth/otp-form";
 
@@ -45,7 +45,7 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
       city: "",
       venue: "",
       budgetBand: "",
-      talentSlugs: initialTalents.filter((slug) => TALENTS.some((t) => t.slug === slug)).slice(0, MAX_TALENTS),
+      talentSlugs: [...new Set(initialTalents)].slice(0, MAX_TALENTS),
       language: "",
       notes: "",
       contactName: "",
@@ -340,13 +340,17 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
 
 function TalentPicker({ selected, onChange }: { selected: string[]; onChange: (slugs: string[]) => void }) {
   const [query, setQuery] = useState("");
-  const matches = query.trim()
-    ? TALENTS.filter(
-        (t) =>
-          !selected.includes(t.slug) &&
-          `${t.stageName} ${t.headline} ${t.categories.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()),
-      ).slice(0, 5)
-    : [];
+  const chosen = useTalentSummaries(selected);
+  const search = useTalentSearch(query);
+  const matches = (search.data ?? []).filter((t) => !selected.includes(t.slug)).slice(0, 5);
+
+  // Slugs from a link (?talent=…) that the catalogue doesn't know drop out quietly.
+  useEffect(() => {
+    if (!chosen.data || chosen.isFetching) return;
+    const known = selected.filter((slug) => chosen.data.some((t) => t.slug === slug));
+    if (known.length !== selected.length) onChange(known);
+  }, [chosen.data, chosen.isFetching, selected, onChange]);
+
   const full = selected.length >= MAX_TALENTS;
 
   return (
@@ -354,7 +358,7 @@ function TalentPicker({ selected, onChange }: { selected: string[]; onChange: (s
       {selected.length > 0 ? (
         <ul className="grid gap-2">
           {selected.map((slug) => {
-            const talent = TALENTS.find((t) => t.slug === slug);
+            const talent = chosen.data?.find((t) => t.slug === slug);
             if (!talent) return null;
             return (
               <li key={slug} className="flex items-center gap-3 rounded-xl border border-line p-2.5 pr-3">

@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ArrowRight, BadgeCheck, CalendarCheck, Clapperboard, Languages, MapPin, Plane, ShieldCheck } from "lucide-react";
 import { CATEGORIES, TALENTS } from "@repo/mock/catalogue/data";
-import { getTalent, similarTalents } from "@repo/mock/catalogue/query";
+import { similarTo, talentProfile } from "@/lib/catalogue";
 import { REPRESENTATION_HELP, REPRESENTATION_LABELS, ctaLabel, enquiryHref, feeBand } from "@/lib/format";
 import { SITE_URL } from "@/lib/site";
 import { FavouriteButton } from "@/components/talent/favourite-button";
@@ -18,7 +18,7 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: PageProps<"/talent/[slug]">): Promise<Metadata> {
-  const talent = getTalent((await params).slug);
+  const talent = await talentProfile((await params).slug);
   // Runs before streaming starts, so unknown slugs get a real 404 status.
   if (!talent) notFound();
   const description = `${talent.headline} based in ${talent.baseCity}. ${talent.bio.slice(0, 120)}…`;
@@ -40,11 +40,11 @@ export default function TalentProfilePage({ params }: PageProps<"/talent/[slug]"
 }
 
 async function Profile({ params }: Pick<PageProps<"/talent/[slug]">, "params">) {
-  const talent = getTalent((await params).slug);
+  const talent = await talentProfile((await params).slug);
   if (!talent) notFound();
 
   const categoryNames = talent.categories.map((slug) => CATEGORIES.find((c) => c.slug === slug)?.name ?? slug);
-  const similar = similarTalents(talent);
+  const similar = await similarTo(talent);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Person",

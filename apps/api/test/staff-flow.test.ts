@@ -32,6 +32,18 @@ const act = (role: string, bookingId: string, action: string, note?: string) =>
   http().post(`/v1/admin/bookings/${bookingId}/actions`).set(as(role)).send({ action, note });
 
 describe("staff access", () => {
+  it("keeps staff and customer sessions in separate cookies", async () => {
+    const step1 = await http().post("/v1/auth/staff/login").send({ email: "ops@demo.in", password: "demo1234" }).expect(200);
+    const login = await http().post("/v1/auth/staff/mfa").send({ mfaToken: step1.body.mfaToken, code: "123456" }).expect(200);
+    const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
+    expect(cookie).toMatch(/^staff_refresh_token=/);
+    await http().post("/v1/auth/refresh").set("cookie", cookie).expect(401); // the customer endpoint ignores it
+    const refreshed = await http().post("/v1/auth/staff/refresh").set("cookie", cookie).expect(200);
+    expect(refreshed.body.user.roles).toContain("OPS");
+    const me = await http().get("/v1/admin/leads").set("authorization", `Bearer ${refreshed.body.accessToken}`).expect(200);
+    expect(Array.isArray(me.body)).toBe(true); // refreshed staff session keeps MFA
+  });
+
   it("keeps customers out of the CRM", async () => {
     await http().get("/v1/admin/leads").set(as("customer")).expect(403);
     await http().get("/v1/admin/leads").expect(401);

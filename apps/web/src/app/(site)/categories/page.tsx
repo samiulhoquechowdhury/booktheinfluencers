@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { CATEGORIES, CITIES, TALENTS } from "@repo/mock/catalogue/data";
+import { CATEGORIES, CITIES } from "@repo/mock/catalogue/data";
+import { categoryCounts } from "@/lib/catalogue";
 import { CategoryIcon } from "@/components/category-icon";
 import { PageIntro } from "@/components/ui/feedback";
 
@@ -10,7 +11,8 @@ export const metadata: Metadata = {
   description: "Browse singers, DJs, comedians, anchors, speakers and creators available for events across India.",
 };
 
-export default function CategoriesPage() {
+export default async function CategoriesPage() {
+  const counts = await categoryCounts();
   return (
     <div className="shell py-12 sm:py-16">
       <PageIntro eyebrow="Categories" title="Every kind of act, one booking team">
@@ -19,7 +21,7 @@ export default function CategoriesPage() {
 
       <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {CATEGORIES.map((category) => {
-          const count = TALENTS.filter((t) => t.categories.includes(category.slug)).length;
+          const count = counts[category.slug] ?? 0;
           return (
             <li key={category.slug}>
               <Link

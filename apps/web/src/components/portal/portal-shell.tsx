@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { getTalent } from "@repo/mock/catalogue/query";
+import { useTalentProfile } from "@/lib/api/hooks";
 import type { Session } from "@/lib/api/client";
 import { RequireSession } from "@/components/auth/require-session";
 
@@ -17,9 +17,16 @@ export function PortalShell({ children }: { children: (session: Session, stageNa
   return (
     <RequireSession role="TALENT">
       {(session) => {
-        const talent = session.talentSlug ? getTalent(session.talentSlug) : undefined;
-        const stageName = talent?.stageName ?? session.name;
-        return (
+        return <Shell session={session} pathname={pathname}>{children}</Shell>;
+      }}
+    </RequireSession>
+  );
+}
+
+function Shell({ session, pathname, children }: { session: Session; pathname: string; children: (session: Session, stageName: string) => ReactNode }) {
+  const { data: talent } = useTalentProfile(session.talentSlug);
+  const stageName = talent?.stageName ?? session.name;
+  return (
           <div>
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
@@ -51,8 +58,5 @@ export function PortalShell({ children }: { children: (session: Session, stageNa
             </nav>
             <div className="mt-8">{children(session, stageName)}</div>
           </div>
-        );
-      }}
-    </RequireSession>
   );
 }

@@ -2,16 +2,16 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, SearchX } from "lucide-react";
 import { formatDate } from "@repo/utils";
 import { BUDGET_BANDS, CATEGORIES, CITIES } from "@repo/mock/catalogue/data";
-import { searchTalents, type TalentFilters } from "@repo/mock/catalogue/query";
+import type { TalentFilters } from "@repo/mock/catalogue/query";
+import { listTalents } from "@/lib/catalogue";
 import { filtersToQuery, type LockedFilters as Locked } from "@repo/mock/catalogue/query-string";
 import { EmptyState } from "@/components/ui/feedback";
 import { TalentCard } from "./talent-card";
 import { SortSelect, TalentFiltersPanel } from "./talent-filters";
 
 /** Filtered, paginated grid shared by /talent, /categories/[slug] and /cities/[city]. */
-export function TalentListing({ filters, basePath, locked = {} }: { filters: TalentFilters; basePath: string; locked?: Locked }) {
-  const effective = { ...filters, ...locked };
-  const { data, meta } = searchTalents(effective);
+export async function TalentListing({ filters, basePath, locked = {} }: { filters: TalentFilters; basePath: string; locked?: Locked }) {
+  const { data, meta } = await listTalents(filters, locked);
 
   const chips = [
     filters.q && `“${filters.q}”`,

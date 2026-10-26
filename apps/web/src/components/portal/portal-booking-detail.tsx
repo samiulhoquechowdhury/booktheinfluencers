@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { formatDateTime, formatDateWithWeekday } from "@repo/utils";
-import { api, errorMessage } from "@/lib/api/client";
+import { DEMO_MODE, api, errorMessage } from "@/lib/api/client";
 import { keys, useTalentBooking, useTalentMessages } from "@/lib/api/hooks";
 import { talentStatus } from "@/lib/booking-status";
 import { durationLabel, inr } from "@/lib/format";
@@ -101,7 +101,7 @@ function TalentThread({ bookingId }: { bookingId: string }) {
       queryKey={keys.talentMessages(bookingId)}
       self="talent"
       send={(body) => api.messages.sendForTalentBooking(bookingId, body)}
-      demoReply={{ label: "Demo: reply as our team", send: (body) => api.demo.replyAsTeam(bookingId, body) }}
+      demoReply={DEMO_MODE ? { label: "Demo: reply as our team", send: (body) => api.demo.replyAsTeam(bookingId, body) } : undefined}
       emptyText="No messages yet. Ask about timings, rider or travel."
       placeholder="Write to our team…"
     />

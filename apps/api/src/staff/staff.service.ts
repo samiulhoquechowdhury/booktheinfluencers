@@ -17,6 +17,8 @@ export const seesFinance = (user: AuthUser) => can(user, "ACCOUNTS");
 
 export type QuoteDraftLine = { type: LineItemType; description: string; customerAmountPaise: string; internalCostPaise: string; taxRateBps: number };
 export type QuoteDraft = { lines: QuoteDraftLine[]; validDays: number; advanceBps: number };
+/** What the builder needs to preview the approval rules (QUO-6) as staff type. */
+export type QuoteRate = { sellingRatePaise: string; minimumRatePaise: string; marginFloorBps: number };
 
 export const BOOKING_ACTIONS = {
   startAvailabilityCheck: ["SALES", "TALENT_MANAGER"],
@@ -277,7 +279,7 @@ export class StaffService {
 
   // ---------- Quote builder (QUO-1…6) ----------
 
-  async draftQuote(user: AuthUser, bookingId: string): Promise<QuoteDraft> {
+  async draftQuote(user: AuthUser, bookingId: string): Promise<QuoteDraft & { rate: QuoteRate }> {
     this.require(user, "SALES");
     const booking = await this.prisma.db.booking.findUnique({ where: { id: bookingId }, include: { lead: true, talent: { include: { rateCards: true } } } });
     if (!booking) throw notFound("Booking");
@@ -294,7 +296,12 @@ export class StaffService {
       );
     }
     lines.push({ type: "SERVICE_FEE", description: "Booking & coordination fee", customerAmountPaise: String((fee * 750n) / 10_000n), internalCostPaise: "0", taxRateBps: 1800 });
-    return { lines, validDays: 7, advanceBps: 5000 };
+    return {
+      lines,
+      validDays: 7,
+      advanceBps: 5000,
+      rate: { sellingRatePaise: String(rate.sellingRatePaise), minimumRatePaise: String(rate.minimumRatePaise), marginFloorBps: QUOTE_MARGIN_FLOOR_BPS },
+    };
   }
 
   /** QUO-6: below the minimum rate or the margin floor, a super admin approves before the customer sees it. */

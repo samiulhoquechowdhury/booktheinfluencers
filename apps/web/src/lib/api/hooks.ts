@@ -19,6 +19,20 @@ export const keys = {
   notifications: ["notifications"] as const,
 };
 
+// Catalogue reads from client components (favourites, compare, enquiry picker, portal header).
+export function useTalentSummaries(slugs: string[]) {
+  return useQuery({ queryKey: ["catalogue", "summaries", slugs], queryFn: () => api.catalogue.summaries(slugs), staleTime: 60_000 });
+}
+
+export function useTalentProfile(slug: string | null | undefined) {
+  return useQuery({ queryKey: ["catalogue", "profile", slug], queryFn: () => api.catalogue.profile(slug!), enabled: Boolean(slug), staleTime: 60_000 });
+}
+
+export function useTalentSearch(q: string) {
+  const term = q.trim();
+  return useQuery({ queryKey: ["catalogue", "search", term], queryFn: () => api.catalogue.search(term), enabled: term.length > 0, staleTime: 60_000 });
+}
+
 export function useLeadMessages(leadId: string) {
   return useQuery({ queryKey: keys.leadMessages(leadId), queryFn: () => api.messages.forLead(leadId) });
 }

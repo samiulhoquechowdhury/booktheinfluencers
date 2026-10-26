@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { featuredTalents } from "@repo/mock/catalogue/query";
+import { featured } from "@/lib/catalogue";
 import { TalentCard } from "@/components/talent/talent-card";
 import { SectionHeading } from "./section-heading";
 
-export function FeaturedTalent() {
+export async function FeaturedTalent() {
+  const talents = await featured();
   return (
     <section id="talent" aria-labelledby="talent-heading" className="shell py-20 sm:py-24">
       <SectionHeading
@@ -28,7 +29,7 @@ export function FeaturedTalent() {
       />
 
       <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {featuredTalents().map((talent) => (
+        {talents.map((talent) => (
           <TalentCard key={talent.slug} talent={talent} />
         ))}
       </div>

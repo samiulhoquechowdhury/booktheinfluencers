@@ -144,11 +144,22 @@ export function bookingAction(db: MockDb, actor: StaffUser, bookingId: string, a
 
 export type QuoteDraftLine = { type: LineItemType; description: string; customerAmountPaise: string; internalCostPaise: string; taxRateBps: number };
 export type QuoteDraft = { lines: QuoteDraftLine[]; validDays: number; advanceBps: number };
+export type QuoteRate = { sellingRatePaise: string; minimumRatePaise: string; marginFloorBps: number };
 
 /** Prefills the builder from the rate card. */
-export function draftQuote(db: MockDb, bookingId: string): QuoteDraft {
-  const quote = buildQuote(db, mustBooking(db, bookingId));
-  return { lines: quote.lineItems.map((line) => ({ ...line })), validDays: 7, advanceBps: 5000 };
+export function draftQuote(db: MockDb, bookingId: string): QuoteDraft & { rate: QuoteRate } {
+  const booking = mustBooking(db, bookingId);
+  const quote = buildQuote(db, booking);
+  return {
+    lines: quote.lineItems.map((line) => ({ ...line })),
+    validDays: 7,
+    advanceBps: 5000,
+    rate: {
+      sellingRatePaise: String(internalFor(booking.talentSlug).sellingRatePaise),
+      minimumRatePaise: String(minimumRateFor(booking.talentSlug)),
+      marginFloorBps: QUOTE_MARGIN_FLOOR_BPS,
+    },
+  };
 }
 
 export function quoteChecks(slug: string, lines: QuoteDraftLine[]) {

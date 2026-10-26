@@ -1,9 +1,8 @@
 "use client";
 
 import { Heart } from "lucide-react";
-import { getTalentSummaries } from "@repo/mock/catalogue/query";
 import { errorMessage } from "@/lib/api/client";
-import { useFavourites } from "@/lib/api/hooks";
+import { useFavourites, useTalentSummaries } from "@/lib/api/hooks";
 import { enquiryHref } from "@/lib/format";
 import { RequireSession } from "@/components/auth/require-session";
 import { EmptyState, ErrorState, Spinner } from "@/components/ui/feedback";
@@ -15,10 +14,12 @@ export function FavouritesView() {
 }
 
 function Favourites() {
-  const { data: slugs, isPending, error, refetch } = useFavourites();
-  if (isPending) return <Spinner label="Loading favourites" />;
-  if (error) return <ErrorState message={errorMessage(error)} onRetry={() => refetch()} />;
-  const talents = getTalentSummaries(slugs);
+  const favourites = useFavourites();
+  const summaries = useTalentSummaries(favourites.data ?? []);
+  if (favourites.isPending || (favourites.data?.length && summaries.isPending)) return <Spinner label="Loading favourites" />;
+  const error = favourites.error ?? summaries.error;
+  if (error) return <ErrorState message={errorMessage(error)} onRetry={() => (favourites.error ? favourites.refetch() : summaries.refetch())} />;
+  const talents = summaries.data ?? [];
 
   return (
     <div>

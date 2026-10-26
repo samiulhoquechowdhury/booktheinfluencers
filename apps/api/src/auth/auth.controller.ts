@@ -7,7 +7,9 @@ import { parse } from "../common/validate";
 import { AuthService, type IssuedSession } from "./auth.service";
 import { CurrentUser, Public, type AuthUser } from "./guard";
 
-const REFRESH_COOKIE = "refresh_token";
+/** Separate cookies so a customer and a staff session can live in one browser (admin shares the site's origin). */
+const COOKIES = { customer: "refresh_token", staff: "staff_refresh_token" } as const;
+type Kind = keyof typeof COOKIES;
 
 const Phone = z.object({ phone: z.string().regex(INDIAN_MOBILE, "Enter a 10-digit Indian mobile number") });
 const Verify = Phone.extend({
@@ -34,7 +36,7 @@ export class AuthController {
   @Post("otp/verify")
   @HttpCode(200)
   async verifyOtp(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
-    return this.respond(res, await this.auth.verifyOtp(parse(Verify, body)));
+    return this.respond(res, await this.auth.verifyOtp(parse(Verify, body)), "customer");
   }
 
   @Public()
@@ -50,22 +52,37 @@ export class AuthController {
   @HttpCode(200)
   async staffMfa(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
     const { mfaToken, code } = parse(StaffMfa, body);
-    return this.respond(res, await this.auth.staffMfa(mfaToken, code));
+    return this.respond(res, await this.auth.staffMfa(mfaToken, code), "staff");
   }
 
   @Public()
   @Post("refresh")
   @HttpCode(200)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    return this.respond(res, await this.auth.refresh(req.cookies?.[REFRESH_COOKIE]));
+    return this.respond(res, await this.auth.refresh(req.cookies?.[COOKIES.customer]), "customer");
+  }
+
+  @Public()
+  @Post("staff/refresh")
+  @HttpCode(200)
+  async staffRefresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.respond(res, await this.auth.refresh(req.cookies?.[COOKIES.staff]), "staff");
   }
 
   @Public()
   @Post("logout")
   @HttpCode(204)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.auth.logout(req.cookies?.[REFRESH_COOKIE]);
-    res.clearCookie(REFRESH_COOKIE, { path: "/v1/auth" });
+    await this.auth.logout(req.cookies?.[COOKIES.customer]);
+    res.clearCookie(COOKIES.customer, { path: "/v1/auth" });
+  }
+
+  @Public()
+  @Post("staff/logout")
+  @HttpCode(204)
+  async staffLogout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.auth.logout(req.cookies?.[COOKIES.staff]);
+    res.clearCookie(COOKIES.staff, { path: "/v1/auth" });
   }
 
   @Get("me")
@@ -79,8 +96,8 @@ export class AuthController {
   }
 
   /** Refresh token lives in an httpOnly cookie scoped to /v1/auth; the access token goes in the body. */
-  private respond(res: Response, session: IssuedSession) {
-    res.cookie(REFRESH_COOKIE, session.refreshToken, {
+  private respond(res: Response, session: IssuedSession, kind: Kind) {
+    res.cookie(COOKIES[kind], session.refreshToken, {
       httpOnly: true,
       sameSite: "strict",
       secure: env.NODE_ENV === "production",

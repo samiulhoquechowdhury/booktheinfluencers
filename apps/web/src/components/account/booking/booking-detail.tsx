@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, FileText, MessageCircle, Receipt } from "lucide-react";
 import type { CustomerLead } from "@repo/schemas";
 import { formatDateTime, formatDateWithWeekday } from "@repo/utils";
-import { api, errorMessage } from "@/lib/api/client";
+import { DEMO_MODE, api, errorMessage } from "@/lib/api/client";
 import { keys, useBooking, useLeadMessages } from "@/lib/api/hooks";
 import { durationLabel, inr } from "@/lib/format";
 import { RequireSession } from "@/components/auth/require-session";
@@ -103,7 +103,7 @@ function Messages({ lead }: { lead: CustomerLead }) {
           queryKey={keys.leadMessages(lead.id)}
           self="customer"
           send={(body) => api.messages.sendForLead(lead.id, body)}
-          demoReply={{ label: "Demo: reply as your manager", send: (body) => api.demo.replyAsManager(lead.id, body) }}
+          demoReply={DEMO_MODE ? { label: "Demo: reply as your manager", send: (body) => api.demo.replyAsManager(lead.id, body) } : undefined}
           emptyText="No messages yet. Say hello or ask a question about your event."
           placeholder="Write to your booking manager…"
         />

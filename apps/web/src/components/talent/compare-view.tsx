@@ -3,17 +3,20 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, GitCompareArrows, X } from "lucide-react";
-import { getTalent } from "@repo/mock/catalogue/query";
+import { useQueries } from "@tanstack/react-query";
+import { api } from "@/lib/api/client";
 import { useCompareList } from "@/lib/compare";
 import { REPRESENTATION_LABELS, ctaLabel, enquiryHref, feeBand } from "@/lib/format";
-import { EmptyState } from "@/components/ui/feedback";
+import { EmptyState, Spinner } from "@/components/ui/feedback";
 
 export function CompareView() {
   const { list, remove } = useCompareList();
-  const talents = list.flatMap((slug) => {
-    const talent = getTalent(slug);
-    return talent ? [talent] : [];
+  const profiles = useQueries({
+    queries: list.map((slug) => ({ queryKey: ["catalogue", "profile", slug], queryFn: () => api.catalogue.profile(slug), staleTime: 60_000 })),
   });
+  if (profiles.some((p) => p.isPending)) return <Spinner label="Loading artists" />;
+  // Artists that no longer exist simply drop out of the comparison.
+  const talents = profiles.flatMap((p) => (p.data ? [p.data] : []));
 
   if (talents.length === 0) {
     return (

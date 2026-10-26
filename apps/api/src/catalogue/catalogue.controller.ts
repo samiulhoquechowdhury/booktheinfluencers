@@ -29,6 +29,12 @@ const Filters = z.object({
   verified: z.enum(["1"]).optional(),
   sort: z.enum(["recommended", "fee-asc", "fee-desc", "name"]).default("recommended"),
   page: z.coerce.number().int().min(1).max(500).default(1),
+  /** Comma-separated slugs (favourites, compare); returns up to 50 in one page. */
+  slugs: z
+    .string()
+    .max(2000)
+    .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 50))
+    .optional(),
 });
 
 const talentInclude = { categories: { include: { category: true } }, reps: { include: { rep: true } } } satisfies Prisma.TalentInclude;
@@ -83,6 +89,7 @@ export class CatalogueController {
     const band = f.budget ? BUDGETS[f.budget] : undefined;
     const where: Prisma.TalentWhereInput = {
       status: "PUBLISHED",
+      ...(f.slugs && { slug: { in: f.slugs } }),
       ...(f.category && { categories: { some: { category: { slug: f.category } } } }),
       ...(f.eventType && { eventTypes: { has: f.eventType } }),
       ...(f.language && { languages: { has: f.language } }),
@@ -120,13 +127,14 @@ export class CatalogueController {
             ? [{ stageName: "asc" }]
             : [{ featured: "desc" }, { tier: "desc" }, { stageName: "asc" }];
 
+    const pageSize = f.slugs ? 50 : PAGE_SIZE;
     const [total, rows] = await this.prisma.db.$transaction([
       this.prisma.db.talent.count({ where }),
-      this.prisma.db.talent.findMany({ where, orderBy, include: talentInclude, skip: (f.page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
+      this.prisma.db.talent.findMany({ where, orderBy, include: talentInclude, skip: (f.page - 1) * pageSize, take: pageSize }),
     ]);
     return {
       data: rows.map(toSummary),
-      meta: { total, page: f.page, pageSize: PAGE_SIZE, pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)) },
+      meta: { total, page: f.page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     };
   }
 

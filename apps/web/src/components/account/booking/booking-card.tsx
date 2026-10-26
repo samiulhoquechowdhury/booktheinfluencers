@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import type { CustomerBooking } from "@repo/schemas";
-import { api } from "@/lib/api/client";
+import { DEMO_MODE, api } from "@/lib/api/client";
 import { useBookingMutation } from "@/lib/api/hooks";
 import { customerStatus } from "@/lib/booking-status";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -65,7 +65,7 @@ export function BookingCard({ leadId, booking }: { leadId: string; booking: Cust
       )}
 
       <div className="mt-5 space-y-3">
-        <DemoControls booking={booking} />
+        {DEMO_MODE && <DemoControls booking={booking} />}
 
         {!booking.cancelledAt && !booking.completedAt && booking.quotes.some((q) => q.status === "ACCEPTED") && (
           <div className="text-sm">

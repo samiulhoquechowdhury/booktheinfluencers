@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import type { LineItemType } from "@repo/schemas";
-import { api, errorMessage, quoteChecks, seesFinance, type QuoteDraft, type QuoteDraftLine, type StaffUser } from "@/lib/api";
+import { api, errorMessage, quoteChecks, seesFinance, type QuoteDraft, type QuoteDraftLine, type QuoteRate, type StaffUser } from "@/lib/api";
 import { inr, percent } from "@/lib/format";
 import { useStaffMutation } from "@/lib/hooks";
 import { Loading, inputClass } from "@/components/ui";
@@ -25,19 +25,19 @@ const toRupees = (paise: string) => (paise ? String(BigInt(paise) / 100n) : "");
 const toPaise = (rupees: string) => String(BigInt(rupees.replace(/\D/g, "") || "0") * 100n);
 
 /** QUO-1…6: itemised quote with live totals and the approval rules. */
-export function QuoteBuilder({ bookingId, slug, staff, onDone }: { bookingId: string; slug: string; staff: StaffUser; onDone: () => void }) {
+export function QuoteBuilder({ bookingId, staff, onDone }: { bookingId: string; staff: StaffUser; onDone: () => void }) {
   const draft = useQuery({ queryKey: ["quote-draft", bookingId], queryFn: () => api.quotes.draft(bookingId), staleTime: Infinity });
   if (draft.isPending) return <Loading label="Preparing draft from the rate card" />;
   if (draft.error) return <p role="alert" className="text-sm text-rose-700">{errorMessage(draft.error)}</p>;
-  return <Editor initial={draft.data} bookingId={bookingId} slug={slug} staff={staff} onDone={onDone} />;
+  return <Editor initial={draft.data} bookingId={bookingId} staff={staff} onDone={onDone} />;
 }
 
-function Editor({ initial, bookingId, slug, staff, onDone }: { initial: QuoteDraft; bookingId: string; slug: string; staff: StaffUser; onDone: () => void }) {
+function Editor({ initial, bookingId, staff, onDone }: { initial: QuoteDraft & { rate: QuoteRate }; bookingId: string; staff: StaffUser; onDone: () => void }) {
   const [lines, setLines] = useState<QuoteDraftLine[]>(initial.lines);
   const [validDays, setValidDays] = useState(initial.validDays);
   const [advanceBps, setAdvanceBps] = useState(initial.advanceBps);
   const finance = seesFinance(staff);
-  const checks = quoteChecks(slug, lines);
+  const checks = quoteChecks(lines, initial.rate);
   const create = useStaffMutation(
     (draft: QuoteDraft) => api.quotes.create(bookingId, draft),
     checks.needsApproval ? "Quote sent to a super admin for approval" : "Quote sent to the customer",

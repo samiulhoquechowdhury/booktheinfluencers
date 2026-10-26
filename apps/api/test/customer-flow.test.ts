@@ -37,6 +37,11 @@ describe("health and catalogue", () => {
     expect(nye.body.meta.total).toBe(0);
   });
 
+  it("loads a saved list by slugs", async () => {
+    const res = await http().get("/v1/talents").query({ slugs: "dj-rhea,aanya-kapoor,nobody" }).expect(200);
+    expect(res.body.data.map((t: { slug: string }) => t.slug).sort()).toEqual(["aanya-kapoor", "dj-rhea"]);
+  });
+
   it("serves profiles and 404s unknown slugs", async () => {
     const res = await http().get("/v1/talents/aanya-kapoor").expect(200);
     expect(res.body).toMatchObject({ stageName: "Aanya Kapoor", feeBandMinPaise: "30000000" });

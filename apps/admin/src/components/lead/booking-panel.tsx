@@ -108,7 +108,7 @@ export function BookingPanel({ booking, staff }: { booking: LeadBooking; staff: 
         {building && (
           <div className="rounded-lg border border-line p-4">
             <h4 className="mb-3 text-sm font-semibold text-ink">Quote builder</h4>
-            <QuoteBuilder bookingId={booking.id} slug={booking.talentSlug} staff={staff} onDone={() => setBuilding(false)} />
+            <QuoteBuilder bookingId={booking.id} staff={staff} onDone={() => setBuilding(false)} />
           </div>
         )}
 
