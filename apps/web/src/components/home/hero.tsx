@@ -56,8 +56,8 @@ export function Hero() {
                 Explore talent
                 <ArrowRight aria-hidden />
               </a>
-              <a href="#how-it-works" className="btn btn-outline-light">
-                How it works
+              <a href="#for-talent" className="btn btn-outline-light">
+                Join as talent
               </a>
             </div>
 

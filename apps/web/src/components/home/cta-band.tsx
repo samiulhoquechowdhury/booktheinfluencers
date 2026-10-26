@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
-import { IMAGES } from "@/lib/mock/home";
+import { IMAGES } from "@/lib/catalogue/data";
 
 export function CtaBand() {
   return (

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { OCCASIONS } from "@/lib/mock/home";
+import { OCCASIONS } from "@/lib/catalogue/data";
 import { SectionHeading } from "./section-heading";
 
 export function Occasions() {

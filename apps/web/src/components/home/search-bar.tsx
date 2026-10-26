@@ -1,18 +1,10 @@
 import { ArrowRight } from "lucide-react";
-import { formatINRCompact } from "@repo/utils";
-import { BUDGET_BANDS, CITIES } from "@/lib/mock/home";
-
-function budgetLabel(band: (typeof BUDGET_BANDS)[number]) {
-  const min = "minPaise" in band ? band.minPaise : undefined;
-  const max = "maxPaise" in band ? band.maxPaise : undefined;
-  if (min === undefined && max !== undefined) return `Under ${formatINRCompact(max)}`;
-  if (max === undefined && min !== undefined) return `${formatINRCompact(min)}+`;
-  return `${formatINRCompact(min ?? 0n)} – ${formatINRCompact(max ?? 0n)}`;
-}
+import { BUDGET_BANDS, CITIES } from "@/lib/catalogue/data";
 
 const fieldClass =
   "w-full bg-transparent font-display text-sm text-ink outline-none placeholder:text-muted";
 
+/** Plain GET form into /talent — works without JavaScript. */
 export function SearchBar() {
   return (
     <div id="search" className="shell relative z-10 -mt-14 scroll-mt-28">
@@ -29,7 +21,9 @@ export function SearchBar() {
           <select name="city" defaultValue="" className={fieldClass}>
             <option value="">Any city</option>
             {CITIES.map((city) => (
-              <option key={city}>{city}</option>
+              <option key={city.slug} value={city.slug}>
+                {city.name}
+              </option>
             ))}
           </select>
         </label>
@@ -43,7 +37,7 @@ export function SearchBar() {
             <option value="">Any budget</option>
             {BUDGET_BANDS.map((band) => (
               <option key={band.id} value={band.id}>
-                {budgetLabel(band)}
+                {band.label}
               </option>
             ))}
           </select>

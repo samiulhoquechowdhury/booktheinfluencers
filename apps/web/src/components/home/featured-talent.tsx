@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { FEATURED_TALENT } from "@/lib/mock/home";
+import { featuredTalents } from "@/lib/catalogue/query";
+import { TalentCard } from "@/components/talent/talent-card";
 import { SectionHeading } from "./section-heading";
-import { TalentCard } from "./talent-card";
 
 export function FeaturedTalent() {
   return (
@@ -16,18 +17,18 @@ export function FeaturedTalent() {
         }
         description="Every profile shows who represents the artist and an indicative fee range. Your final price comes in a written quote."
         action={
-          <a
+          <Link
             href="/talent"
             className="flex shrink-0 items-center gap-2 font-display text-sm font-semibold text-ink hover:text-gold-deep"
           >
             View all talent
             <ArrowRight className="size-4" aria-hidden />
-          </a>
+          </Link>
         }
       />
 
       <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {FEATURED_TALENT.map((talent) => (
+        {featuredTalents().map((talent) => (
           <TalentCard key={talent.slug} talent={talent} />
         ))}
       </div>

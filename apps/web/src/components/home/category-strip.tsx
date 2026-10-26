@@ -1,7 +1,6 @@
-import { Disc3, Drama, MicVocal, Presentation, Sparkles } from "lucide-react";
-import { CATEGORIES } from "@/lib/mock/home";
-
-const ICONS = { MicVocal, Disc3, Drama, Presentation, Sparkles };
+import Link from "next/link";
+import { CATEGORIES } from "@/lib/catalogue/data";
+import { CategoryIcon } from "@/components/category-icon";
 
 export function CategoryStrip() {
   return (
@@ -10,20 +9,17 @@ export function CategoryStrip() {
         Browse by category
       </h2>
       <ul className="mt-5 flex flex-wrap justify-center gap-3">
-        {CATEGORIES.map(({ slug, label, icon }) => {
-          const Icon = ICONS[icon];
-          return (
-            <li key={slug}>
-              <a
-                href={`/talent?category=${slug}`}
-                className="flex items-center gap-2.5 rounded-full border border-line bg-white px-5 py-3 font-display text-sm font-medium text-ink transition-colors hover:border-gold hover:bg-cream-soft"
-              >
-                <Icon className="size-[18px] text-gold-deep" aria-hidden />
-                {label}
-              </a>
-            </li>
-          );
-        })}
+        {CATEGORIES.map(({ slug, name, icon }) => (
+          <li key={slug}>
+            <Link
+              href={`/categories/${slug}`}
+              className="flex items-center gap-2.5 rounded-full border border-line bg-white px-5 py-3 font-display text-sm font-medium text-ink transition-colors hover:border-gold hover:bg-cream-soft"
+            >
+              <CategoryIcon icon={icon} className="size-[18px] text-gold-deep" />
+              {name}
+            </Link>
+          </li>
+        ))}
       </ul>
     </section>
   );
