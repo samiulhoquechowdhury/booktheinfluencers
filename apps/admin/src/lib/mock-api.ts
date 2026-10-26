@@ -5,7 +5,7 @@
 import { allowedNextStages, type LeadStage } from "@repo/utils";
 import { TALENTS } from "@repo/mock/catalogue/data";
 import { BLACKOUT_SEED } from "@repo/mock/catalogue/blackouts";
-import { DEMO_OTP, STAFF_DEMO_PASSWORD, STAFF_USERS, internalFor, minimumRateFor, type StaffUser } from "@repo/mock/internal";
+import { DEMO_OTP, STAFF_DEMO_PASSWORD, STAFF_USERS, internalFor, type StaffUser } from "@repo/mock/internal";
 import {
   ApiError,
   bookingsOf,
@@ -40,6 +40,8 @@ import {
   type QuoteDraftLine,
 } from "@repo/mock/staff";
 import { loadDb, mutate, readStaffId, writeStaffId } from "@repo/mock/store";
+import { addRep, allTalentRecords, createTalent, setRateCard, setRepVerification, setTalentStatus, talentDetail, updateTalent } from "@repo/mock/talent-admin";
+import type { ProfileStatus, RateCardInput, RepInput, TalentInput, VerificationStatus } from "@repo/schemas";
 import type { LeadRec, MockDb, TalentApplicationRec } from "@repo/mock/types";
 
 
@@ -222,15 +224,30 @@ export const mockApi = {
       call(() => {
         const staff = actor();
         const db = loadDb();
-        return TALENTS.map((t) => ({
-          ...t,
+        const showRates = can(staff, "SALES", "TALENT_MANAGER", "ACCOUNTS");
+        return allTalentRecords(db).map((t) => ({
+          slug: t.slug,
+          stageName: t.stageName,
+          headline: t.headline,
+          baseCity: t.baseCity,
+          languages: t.languages,
+          tier: t.tier,
+          status: t.status,
+          verified: t.reps.some((r) => r.verification === "VERIFIED"),
+          repName: t.reps[0]?.name ?? "—",
+          feeBandMinPaise: t.feeBandMinPaise,
+          feeBandMaxPaise: t.feeBandMaxPaise,
           openBookings: db.bookings.filter((b) => b.talentSlug === t.slug && !b.cancelledAt && !b.completedAt).length,
-          rateCard: seesFinance(staff) || can(staff, "SALES", "TALENT_MANAGER")
-            ? { sellingRatePaise: String(internalFor(t.slug).sellingRatePaise), minimumRatePaise: String(minimumRateFor(t.slug)), payoutBps: internalFor(t.slug).payoutBps }
-            : null,
-          repName: internalFor(t.slug).repName,
+          rateCard: showRates ? t.rateCard : null,
         }));
       }),
+    get: (slug: string) => call(() => talentDetail(loadDb(), actor(), slug)),
+    create: (input: TalentInput) => call(() => mutate((db) => createTalent(db, actor(), input))),
+    update: (slug: string, input: TalentInput) => call(() => mutate((db) => updateTalent(db, actor(), slug, input))),
+    setStatus: (slug: string, status: ProfileStatus) => call(() => mutate((db) => setTalentStatus(db, actor(), slug, status))),
+    setRateCard: (slug: string, card: RateCardInput) => call(() => mutate((db) => setRateCard(db, actor(), slug, card))),
+    addRep: (slug: string, rep: RepInput) => call(() => mutate((db) => addRep(db, actor(), slug, rep))),
+    setRepVerification: (repId: string, verification: VerificationStatus) => call(() => mutate((db) => setRepVerification(db, actor(), repId, verification))),
     blackouts: (slug: string) => call(() => ({ seeded: BLACKOUT_SEED[slug] ?? [], all: talentBlackouts(loadDb(), slug, BLACKOUT_SEED[slug]) })),
     setBlackout: (slug: string, date: string, on: boolean) => call(() => mutate((db) => staffSetBlackout(db, actor(), slug, date, on))),
   },

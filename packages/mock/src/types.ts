@@ -5,6 +5,7 @@ import type {
   MilestoneStatus,
   PayoutStatus,
   QuoteStatus,
+  TalentAdminDetail,
 } from "@repo/schemas";
 import type { LeadStage } from "@repo/utils";
 
@@ -164,7 +165,11 @@ export type MockDb = {
   notificationsSeenAt: Record<string, string>;
   /** AUD-1..3: staff mutations, newest last. */
   audit: AuditRec[];
+  /** ADM-1…5: talents created or edited in the admin, keyed by slug. Untouched seed talents aren't stored. */
+  talentRecords: Record<string, TalentRecord>;
 };
+
+export type TalentRecord = Omit<TalentAdminDetail, "bookingCount" | "publishBlockers"> & { createdAt: string };
 
 export type AuditRec = {
   id: string;

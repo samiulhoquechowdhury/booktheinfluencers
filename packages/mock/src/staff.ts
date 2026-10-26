@@ -1,6 +1,7 @@
 import type { LineItemType } from "@repo/schemas";
 import { computeQuoteTotals, type LeadStage } from "@repo/utils";
 import { TALENTS } from "./catalogue/data";
+import { rateCardFor } from "./talent-admin";
 import { MINIMUM_RATE_BPS, QUOTE_MARGIN_FLOOR_BPS, internalFor, minimumRateFor, type StaffRole, type StaffUser } from "./internal";
 import {
   ApiError,
@@ -155,25 +156,25 @@ export function draftQuote(db: MockDb, bookingId: string): QuoteDraft & { rate: 
     validDays: 7,
     advanceBps: 5000,
     rate: {
-      sellingRatePaise: String(internalFor(booking.talentSlug).sellingRatePaise),
-      minimumRatePaise: String(minimumRateFor(booking.talentSlug)),
+      sellingRatePaise: rateCardFor(db, booking.talentSlug).sellingRatePaise,
+      minimumRatePaise: rateCardFor(db, booking.talentSlug).minimumRatePaise,
       marginFloorBps: QUOTE_MARGIN_FLOOR_BPS,
     },
   };
 }
 
-export function quoteChecks(slug: string, lines: QuoteDraftLine[]) {
+export function quoteChecks(slug: string, lines: QuoteDraftLine[], card?: { sellingRatePaise: string; minimumRatePaise: string }) {
   const totals = computeQuoteTotals(lines.map((l) => ({ customerAmountPaise: BigInt(l.customerAmountPaise || "0"), taxRateBps: l.taxRateBps })));
   const cost = lines.reduce((sum, l) => sum + BigInt(l.internalCostPaise || "0"), 0n);
   const marginPaise = totals.subtotalPaise - cost;
   const marginBps = totals.subtotalPaise > 0n ? Number((marginPaise * 10_000n) / totals.subtotalPaise) : 0;
   const fee = lines.filter((l) => l.type === "TALENT_FEE").reduce((sum, l) => sum + BigInt(l.customerAmountPaise || "0"), 0n);
-  const minimum = minimumRateFor(slug);
+  const minimum = card ? BigInt(card.minimumRatePaise) : minimumRateFor(slug);
   const reasons = [
-    ...(fee < minimum ? [`Artist fee is below the minimum rate (${MINIMUM_RATE_BPS / 100}% of the standard rate)`] : []),
+    ...(fee < minimum ? [card ? "Artist fee is below the minimum rate" : `Artist fee is below the minimum rate (${MINIMUM_RATE_BPS / 100}% of the standard rate)`] : []),
     ...(marginBps < QUOTE_MARGIN_FLOOR_BPS ? [`Margin is below the ${QUOTE_MARGIN_FLOOR_BPS / 100}% floor`] : []),
   ];
-  return { ...totals, costPaise: cost, marginPaise, marginBps, minimumRatePaise: minimum, sellingRatePaise: internalFor(slug).sellingRatePaise, needsApproval: reasons.length > 0, reasons };
+  return { ...totals, costPaise: cost, marginPaise, marginBps, minimumRatePaise: minimum, sellingRatePaise: card ? BigInt(card.sellingRatePaise) : internalFor(slug).sellingRatePaise, needsApproval: reasons.length > 0, reasons };
 }
 
 function validateDraft(draft: QuoteDraft) {
@@ -200,7 +201,7 @@ export function createQuote(db: MockDb, actor: StaffUser, bookingId: string, dra
   const existing = quotesOf(db, booking.id);
   if (existing.some((q) => q.status === "ACCEPTED")) throw new ApiError("INVALID", "A quote is already accepted");
 
-  const checks = quoteChecks(booking.talentSlug, draft.lines);
+  const checks = quoteChecks(booking.talentSlug, draft.lines, db.talentRecords[booking.talentSlug]?.rateCard ?? undefined);
   for (const q of existing) if (q.status === "SENT" || q.status === "PENDING_APPROVAL") q.status = "SUPERSEDED";
   const lines: QuoteLineRec[] = draft.lines.map((l) => ({ ...l, description: l.description.trim() }));
   const quote: QuoteRec = {

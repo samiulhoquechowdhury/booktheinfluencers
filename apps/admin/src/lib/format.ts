@@ -1,4 +1,4 @@
-import type { AvailabilityStatus, MilestoneStatus, QuoteStatus } from "@repo/schemas";
+import type { AvailabilityStatus, MilestoneStatus, ProfileStatus, QuoteStatus, VerificationStatus } from "@repo/schemas";
 import { formatINR, formatINRCompact, type LeadStage } from "@repo/utils";
 
 export const inr = (paise: string | bigint) => formatINR(BigInt(paise));
@@ -80,3 +80,11 @@ export const stageTone = (stage: LeadStage): Tone =>
 
 export const availabilityTone = (a: AvailabilityStatus): Tone =>
   a === "CONFIRMED" ? "success" : a === "UNAVAILABLE" ? "danger" : a === "AVAILABLE" || a === "TENTATIVE" ? "action" : "info";
+
+export const PROFILE_STATUS_LABELS: Record<ProfileStatus, string> = { DRAFT: "Draft", PUBLISHED: "Live", HIDDEN: "Hidden" };
+export const profileTone = (s: ProfileStatus): Tone => (s === "PUBLISHED" ? "success" : s === "HIDDEN" ? "danger" : "neutral");
+export const verificationTone = (v: VerificationStatus): Tone => (v === "VERIFIED" ? "success" : v === "REJECTED" ? "danger" : "action");
+
+/** Money inputs are typed in whole rupees; the API takes paise strings. */
+export const toRupees = (paise: string | null | undefined) => (paise ? String(BigInt(paise) / 100n) : "");
+export const toPaise = (rupees: string) => String(BigInt(rupees.replace(/\D/g, "") || "0") * 100n);

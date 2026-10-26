@@ -105,6 +105,7 @@ export function buildSeed(): MockDb {
     newsletter: [],
     notificationsSeenAt: {},
     audit: [],
+    talentRecords: {},
   };
 
   // 1. Corporate show — fully confirmed, balance still due.

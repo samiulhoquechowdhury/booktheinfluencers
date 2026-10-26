@@ -14,6 +14,8 @@ import { PrismaService } from "./prisma/prisma.service";
 import { StaffController } from "./staff/staff.controller";
 import { StaffService } from "./staff/staff.service";
 import { TalentPortalController } from "./talent/talent.controller";
+import { TalentAdminController } from "./talents/talent-admin.controller";
+import { TalentAdminService } from "./talents/talent-admin.service";
 import { DevProvidersController } from "./webhooks/dev-providers.controller";
 import { WebhooksController } from "./webhooks/webhooks.controller";
 
@@ -27,6 +29,7 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     TalentPortalController,
     IntakeController,
     StaffController,
+    TalentAdminController,
     WebhooksController,
     // Simulated provider screens never ship to production.
     ...(env.NODE_ENV === "production" ? [] : [DevProvidersController]),
@@ -35,6 +38,7 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     PrismaService,
     AuthService,
     StaffService,
+    TalentAdminService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],

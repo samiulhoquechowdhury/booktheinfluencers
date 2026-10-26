@@ -2,6 +2,7 @@
 
 import { ApiError } from "@repo/mock/server";
 import { STAFF_ROLES, type StaffRole, type StaffUser } from "@repo/mock/internal";
+import type { TalentAdminDetail } from "@repo/schemas";
 import type { mockApi, LeadDetail, LeadRow } from "./mock-api";
 
 // HTTP transport for the staff API (/v1/admin). Same interface as mock-api.ts, so the screens
@@ -209,6 +210,13 @@ export const httpApi: typeof mockApi = {
 
   talents: {
     list: async () => as(await request("/admin/talents")),
+    get: (slug) => request<TalentAdminDetail>(`/admin/talents/${id(slug)}`),
+    create: (input) => post<{ slug: string }>("/admin/talents", input),
+    update: (slug, input) => request(`/admin/talents/${id(slug)}`, { method: "PUT", body: input }),
+    setStatus: (slug, status) => post(`/admin/talents/${id(slug)}/status`, { status }),
+    setRateCard: (slug, card) => request(`/admin/talents/${id(slug)}/rate-card`, { method: "PUT", body: card }),
+    addRep: (slug, rep) => post(`/admin/talents/${id(slug)}/reps`, rep),
+    setRepVerification: (repId, verification) => post(`/admin/reps/${id(repId)}/verification`, { verification }),
     blackouts: (slug) => request(`/admin/talents/${id(slug)}/blackouts`),
     setBlackout: (slug, date, on) => request(`/admin/talents/${id(slug)}/blackouts/${id(date)}`, { method: on ? "POST" : "DELETE" }),
   },

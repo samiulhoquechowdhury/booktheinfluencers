@@ -38,6 +38,7 @@ function upgrade(db: MockDb): MockDb {
   db.newsletter ??= [];
   db.notificationsSeenAt ??= {};
   db.audit ??= [];
+  db.talentRecords ??= {};
   return db;
 }
 
