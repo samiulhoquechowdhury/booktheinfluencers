@@ -145,8 +145,8 @@ model User {
   deletedAt    DateTime?
 
   talent        Talent?
-  leads         Lead[]           @relation("CustomerLeads")
-  ownedLeads    Lead[]           @relation("LeadOwner")
+  leads         Lead[]            @relation("CustomerLeads")
+  ownedLeads    Lead[]            @relation("LeadOwner")
   favourites    Favourite[]
   sessions      Session[]
   auditEntries  AuditLog[]
@@ -211,6 +211,7 @@ model Talent {
   tier               TalentTier         @default(STANDARD)
   status             ProfileStatus      @default(DRAFT)
   featured           Boolean            @default(false)
+  blackoutSelfEdit   Boolean            @default(true) // TAL-3: the artist may edit their own calendar
   representationType RepresentationType
   feeBandMinPaise    BigInt? // public
   feeBandMaxPaise    BigInt? // public
@@ -278,12 +279,14 @@ model TalentRep {
 }
 
 model Blackout {
-  id       String  @id @default(cuid())
-  talentId String
-  date     String // ISO calendar date in India time, e.g. 2026-12-31
-  note     String?
-  locked   Boolean @default(false) // set by the talent team; the artist can't clear it
-  talent   Talent  @relation(fields: [talentId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  talentId  String
+  date      String // ISO calendar date in India time, e.g. 2026-12-31
+  note      String?
+  locked    Boolean  @default(false) // set by the talent team; the artist can't clear it
+  bookingId String?  @unique // set when a confirmed booking holds the date; cleared if it's cancelled
+  talent    Talent   @relation(fields: [talentId], references: [id], onDelete: Cascade)
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
 
   @@unique([talentId, date])
 }
@@ -362,6 +365,7 @@ model Booking {
   contracts  Contract[]
   milestones PaymentMilestone[]
   payout     Payout?
+  blackout   Blackout?
   messages   Message[]
 
   @@unique([leadId, talentId])
@@ -401,10 +405,10 @@ model Message {
 // ---------- Quotes, contracts, money ----------
 
 model Quote {
-  id                String        @id @default(cuid())
+  id                String          @id @default(cuid())
   bookingId         String
   version           Int
-  status            QuoteStatus   @default(DRAFT)
+  status            QuoteStatus     @default(DRAFT)
   validUntil        DateTime
   subtotalPaise     BigInt
   taxPaise          BigInt
@@ -416,8 +420,8 @@ model Quote {
   acceptedByUserId  String?
   acceptedIp        String?
   approvedById      String?
-  createdAt         DateTime      @default(now())
-  booking           Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+  booking           Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   lineItems         QuoteLineItem[]
 
   @@unique([bookingId, version])
@@ -593,21 +597,21 @@ enum NotificationStatus {
 /// Written in the same transaction as the business event; apps/worker sends them.
 /// A rolled-back change never notifies, and a failed send is retried with backoff.
 model Notification {
-  id          String              @id @default(cuid())
-  event       String // e.g. "quote.sent", "booking.confirmed"
-  channel     NotificationChannel
-  to          String // phone (SMS/WhatsApp) or email address
-  subject     String?
-  body        String
-  leadId      String?
-  status      NotificationStatus  @default(PENDING)
-  attempts    Int                 @default(0)
-  lastError   String?
-  sendAfter   DateTime            @default(now())
-  sentAt      DateTime?
+  id        String              @id @default(cuid())
+  event     String // e.g. "quote.sent", "booking.confirmed"
+  channel   NotificationChannel
+  to        String // phone (SMS/WhatsApp) or email address
+  subject   String?
+  body      String
+  leadId    String?
+  status    NotificationStatus  @default(PENDING)
+  attempts  Int                 @default(0)
+  lastError String?
+  sendAfter DateTime            @default(now())
+  sentAt    DateTime?
   /// Scheduled reminders use a key so the same reminder is never queued twice.
-  dedupeKey   String?             @unique
-  createdAt   DateTime            @default(now())
+  dedupeKey String?             @unique
+  createdAt DateTime            @default(now())
 
   @@index([status, sendAfter])
   @@index([leadId])

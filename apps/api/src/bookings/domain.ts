@@ -44,8 +44,32 @@ export async function transitionLead(
   });
   if (!result.ok) throw new DomainError("INVALID_TRANSITION", result.reason, 409);
   await tx.lead.update({ where: { id: leadId }, data: { stage: to, ...(to === "LOST" && { lostReason: opts.reason }) } });
+  if (to === "LOST" || to === "CANCELLED") await tx.blackout.deleteMany({ where: { bookingId: { in: lead.bookings.map((b) => b.id) } } });
   await activity(tx, leadId, `Stage: ${lead.stage} → ${to}`, opts.reason ?? opts.completionNote ?? null, true, opts.actorId);
 }
+
+// ---------- Calendar (AVL-4, CAT-4) ----------
+
+const longDate = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+export const readableDate = (date: string) => longDate.format(new Date(`${date}T00:00:00Z`));
+
+/** Throws when any of these talents has the date blocked, naming them so the caller can fix the brief. */
+export async function assertDateOpen(tx: Tx, talentIds: string[], date: string) {
+  const rows = await tx.blackout.findMany({ where: { talentId: { in: talentIds }, date }, include: { talent: { select: { stageName: true } } } });
+  if (rows.length === 0) return;
+  const names = rows.map((r) => r.talent.stageName);
+  const who = names.length === 1 ? `${names[0]} isn't` : `${names.slice(0, -1).join(", ")} and ${names.at(-1)} aren't`;
+  throw new DomainError("DATE_BLOCKED", `${who} available on ${readableDate(date)}. Pick another date or remove them from the shortlist.`, 409, { field: "eventDate", talents: names });
+}
+
+/** A confirmed booking holds the artist's date, so they drop out of date searches and can't be double-booked. */
+async function holdDate(tx: Tx, booking: { id: string; talentId: string }, date: string, ref: string) {
+  const existing = await tx.blackout.findUnique({ where: { talentId_date: { talentId: booking.talentId, date } } });
+  if (!existing) await tx.blackout.create({ data: { talentId: booking.talentId, date, locked: true, bookingId: booking.id, note: `Booked · ${ref}` } });
+}
+
+/** Frees a date held by a booking that's cancelled. Blocks added by hand stay. */
+export const releaseDate = (tx: Tx, bookingId: string) => tx.blackout.deleteMany({ where: { bookingId } });
 
 /** OPS-1 / AVL-3: the only path to CONFIRMED. Run after quote acceptance, signature, advance payment and rep acceptance. */
 export async function evaluateConfirmation(tx: Tx, bookingId: string) {
@@ -74,6 +98,7 @@ export async function evaluateConfirmation(tx: Tx, bookingId: string) {
       marginPaise: quote.subtotalPaise - quote.internalCostPaise,
     },
   });
+  await holdDate(tx, booking, booking.lead.eventDate, booking.lead.ref);
   if (booking.lead.stage === "ADVANCE_PENDING") await transitionLead(tx, booking.leadId, "CONFIRMED", { actor: "system" });
   await activity(tx, booking.leadId, `${booking.talent.stageName} is confirmed`, "Contract signed, advance received and the artist's team has accepted.");
   await notifyCustomer(tx, booking.leadId, { event: "booking.confirmed", subject: "Your booking is confirmed", body: `${booking.talent.stageName} is confirmed for your event.` });

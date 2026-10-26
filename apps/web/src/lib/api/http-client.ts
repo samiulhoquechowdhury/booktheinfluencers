@@ -5,6 +5,7 @@ import type {
   CustomerLead,
   EnquiryFormValues,
   TalentBooking,
+  TalentCalendar,
   TalentProfile,
   TalentSummary,
 } from "@repo/schemas";
@@ -123,7 +124,7 @@ export const httpApi: typeof mockApi = {
   talent: {
     bookings: () => request<TalentBooking[]>("/talent/bookings"),
     booking: (bookingId) => request<TalentBooking>(`/talent/bookings/${encodeURIComponent(bookingId)}`),
-    blackouts: () => request<{ seeded: string[]; all: string[] }>("/talent/blackouts"),
+    blackouts: () => request<TalentCalendar>("/talent/blackouts"),
     setBlackout: (date, on) => request<void>(`/talent/blackouts/${encodeURIComponent(date)}`, { method: on ? "PUT" : "DELETE" }),
   },
 

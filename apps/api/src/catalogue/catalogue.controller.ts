@@ -101,14 +101,11 @@ export class CatalogueController {
           { travelsTo: { hasSome: [f.city, "Pan-India", "International"] } },
         ],
       }),
-      ...(band && {
-        AND: [
-          ...(band.min !== undefined ? [{ feeBandMaxPaise: { gte: band.min } }] : []),
-          ...(band.max !== undefined ? [{ feeBandMinPaise: { lte: band.max } }] : []),
-        ],
-      }),
-      ...(f.q && {
-        AND: f.q.split(/\s+/).map((word) => ({
+      // Budget and keyword conditions share one AND list, so neither filter replaces the other.
+      AND: [
+        ...(band?.min !== undefined ? [{ feeBandMaxPaise: { gte: band.min } }] : []),
+        ...(band?.max !== undefined ? [{ feeBandMinPaise: { lte: band.max } }] : []),
+        ...(f.q ?? "").split(/\s+/).filter(Boolean).map((word) => ({
           OR: [
             { stageName: { contains: word, mode: "insensitive" as const } },
             { headline: { contains: word, mode: "insensitive" as const } },
@@ -116,7 +113,7 @@ export class CatalogueController {
             { tags: { has: word.toLowerCase() } },
           ],
         })),
-      }),
+      ],
     };
     const orderBy: Prisma.TalentOrderByWithRelationInput[] =
       f.sort === "fee-asc"

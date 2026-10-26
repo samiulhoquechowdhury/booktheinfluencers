@@ -251,6 +251,14 @@ async function main() {
 
   await prisma.counter.create({ data: { name: "lead", value: demo.seq } });
 
+  // AVL-4: confirmed bookings hold the artist's date (same rule as bookings/domain.ts holdDate).
+  await prisma.$executeRaw`
+    INSERT INTO "Blackout" ("id", "talentId", "date", "locked", "bookingId", "note")
+    SELECT 'blk_' || b."id", b."talentId", l."eventDate", true, b."id", 'Booked · ' || l."ref"
+    FROM "Booking" b JOIN "Lead" l ON l."id" = b."leadId"
+    WHERE b."confirmedAt" IS NOT NULL AND b."cancelledAt" IS NULL
+    ON CONFLICT DO NOTHING`;
+
   const counts = await Promise.all([prisma.user.count(), prisma.talent.count(), prisma.lead.count(), prisma.booking.count(), prisma.quote.count()]);
   console.log(`Seeded ${counts[0]} users, ${counts[1]} talents, ${counts[2]} leads, ${counts[3]} bookings, ${counts[4]} quotes.`);
 }

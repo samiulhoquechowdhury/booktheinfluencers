@@ -1,4 +1,4 @@
-import type { EnquiryInput } from "@repo/schemas";
+import type { CalendarEntry, EnquiryInput, TalentCalendar } from "@repo/schemas";
 import {
   canTransition,
   computeQuoteTotals,
@@ -7,6 +7,7 @@ import {
   toIstDateKey,
   type LeadStage,
 } from "@repo/utils";
+import { BLACKOUT_SEED } from "./catalogue/blackouts";
 import { BUDGET_BANDS, TALENTS } from "./catalogue/data";
 import { ACCOUNT_MANAGER, internalFor } from "./internal";
 import type { BookingRec, LeadRec, MilestoneRec, MockDb, QuoteLineRec, QuoteRec } from "./types";
@@ -81,6 +82,7 @@ export function transitionLead(
   if (!result.ok) throw new ApiError("INVALID_TRANSITION", result.reason);
   activity(db, lead.id, `Stage: ${lead.stage} → ${to}`, opts.reason ?? opts.completionNote ?? null, true);
   lead.stage = to;
+  if (to === "LOST" || to === "CANCELLED") for (const b of bookings) releaseDate(db, b.id);
 }
 
 /**
@@ -113,6 +115,7 @@ export function evaluateConfirmation(db: MockDb, booking: BookingRec) {
   booking.marginPaise = String(BigInt(quote.subtotalPaise) - BigInt(quote.internalCostPaise));
 
   const lead = must(leadOf(db, booking.leadId), "Lead");
+  holdDate(db, booking, lead);
   if (lead.stage === "ADVANCE_PENDING") transitionLead(db, lead, "CONFIRMED", { actor: "system" });
   activity(db, lead.id, `${talentName(booking.talentSlug)} is confirmed`, "Contract signed, advance received and the artist's team has accepted.");
 }
@@ -192,6 +195,7 @@ export function milestonesFor(quote: QuoteRec, lead: LeadRec, from = new Date())
 // ---------- Customer actions ----------
 
 export function submitEnquiry(db: MockDb, customerId: string, input: EnquiryInput) {
+  assertDateOpen(db, input.talentSlugs, input.eventDate);
   const band = BUDGET_BANDS.find((b) => b.id === input.budgetBand);
   const lead: LeadRec = {
     id: newId("lead"),
@@ -484,6 +488,7 @@ export function runDemoAction(db: MockDb, bookingId: string, action: DemoAction,
       if (!reason) throw new ApiError("VALIDATION", "A cancellation reason is required");
       booking.cancelledAt = nowIso();
       booking.cancelReason = reason;
+      releaseDate(db, booking.id);
       for (const m of milestonesOf(db, booking.id)) if (m.status !== "PAID") m.status = "CANCELLED";
       const live = bookingsOf(db, lead.id).filter((b) => !b.cancelledAt);
       if (live.length === 0 && (lead.stage === "ADVANCE_PENDING" || lead.stage === "CONFIRMED")) {
@@ -497,17 +502,56 @@ export function runDemoAction(db: MockDb, bookingId: string, action: DemoAction,
 
 // ---------- Talent portal ----------
 
-export function talentBlackouts(db: MockDb, slug: string, seed: readonly string[] = []) {
-  return [...new Set([...seed, ...(db.blackouts[slug] ?? [])])].sort();
+// ---------- Calendar (AVL-4, TAL-3) — mirrors apps/api ----------
+
+const longDate = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+export const readableDate = (date: string) => longDate.format(new Date(`${date}T00:00:00Z`));
+
+export const seedCalendar = (): MockDb["calendar"] =>
+  Object.fromEntries(Object.entries(BLACKOUT_SEED).map(([slug, dates]) => [slug, dates.map((date) => ({ date, source: "manager" as const, note: "Set at onboarding", bookingId: null }))]));
+
+export function calendarFor(db: MockDb, slug: string): TalentCalendar {
+  const rows = (db.calendar[slug] ?? []).toSorted((a, b) => a.date.localeCompare(b.date));
+  const entries = rows.map<CalendarEntry>((r) => {
+    const lead = r.bookingId ? leadOf(db, db.bookings.find((b) => b.id === r.bookingId)?.leadId ?? "") : undefined;
+    return { date: r.date, source: r.source, note: r.note, ref: lead?.ref ?? null, leadId: lead?.id ?? null };
+  });
+  return { seeded: rows.filter((r) => r.source !== "artist").map((r) => r.date), all: rows.map((r) => r.date), entries, selfEdit: db.calendarSelfEdit[slug] ?? true };
 }
 
-export function setBlackout(db: MockDb, slug: string, date: string, on: boolean) {
+export const isBlocked = (db: MockDb, slug: string, date: string) => (db.calendar[slug] ?? []).some((r) => r.date === date);
+
+/** Blocks or clears a date. The talent team's dates are locked for the artist; booking holds for everyone. */
+export function setCalendarDate(db: MockDb, slug: string, date: string, on: boolean, by: "manager" | "artist", note?: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError("VALIDATION", "Pick a valid date");
   if (on && date < toIstDateKey(new Date())) throw new ApiError("VALIDATION", "Blackout dates must be in the future");
-  const current = new Set(db.blackouts[slug] ?? []);
-  if (on) current.add(date);
-  else current.delete(date);
-  db.blackouts[slug] = [...current].sort();
+  if (by === "artist" && db.calendarSelfEdit[slug] === false) throw new ApiError("FORBIDDEN", "Your manager looks after your calendar — ask them to change a date");
+  const rows = (db.calendar[slug] ??= []);
+  const existing = rows.find((r) => r.date === date);
+  if (existing?.source === "booking") {
+    const ref = leadOf(db, db.bookings.find((b) => b.id === existing.bookingId)?.leadId ?? "")?.ref;
+    throw new ApiError("BOOKED", by === "artist" ? "You have a confirmed booking on this date" : `This date is held by booking ${ref}. Cancel that booking to free it.`);
+  }
+  if (by === "artist" && existing?.source === "manager") throw new ApiError("LOCKED", "This date was set by your manager — ask them to clear it");
+  db.calendar[slug] = rows.filter((r) => r.date !== date);
+  if (on) db.calendar[slug].push({ date, source: by, note: note?.trim() || null, bookingId: null });
+}
+
+/** Throws when any of these talents has the date blocked, naming them. */
+export function assertDateOpen(db: MockDb, slugs: string[], date: string) {
+  const names = slugs.filter((slug) => isBlocked(db, slug, date)).map(talentName);
+  if (names.length === 0) return;
+  const who = names.length === 1 ? `${names[0]} isn't` : `${names.slice(0, -1).join(", ")} and ${names.at(-1)} aren't`;
+  throw new ApiError("DATE_BLOCKED", `${who} available on ${readableDate(date)}. Pick another date or remove them from the shortlist.`);
+}
+
+function holdDate(db: MockDb, booking: BookingRec, lead: LeadRec) {
+  if (isBlocked(db, booking.talentSlug, lead.eventDate)) return;
+  (db.calendar[booking.talentSlug] ??= []).push({ date: lead.eventDate, source: "booking", note: `Booked · ${lead.ref}`, bookingId: booking.id });
+}
+
+export function releaseDate(db: MockDb, bookingId: string) {
+  for (const slug of Object.keys(db.calendar)) db.calendar[slug] = db.calendar[slug]!.filter((r) => r.bookingId !== bookingId);
 }
 
 // ---------- Messages (CUS-3) ----------

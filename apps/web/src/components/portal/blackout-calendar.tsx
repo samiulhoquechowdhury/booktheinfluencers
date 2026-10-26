@@ -48,9 +48,15 @@ function Calendar() {
   if (blackouts.isPending || bookings.isPending) return <Spinner />;
   if (blackouts.error) return <ErrorState message={errorMessage(blackouts.error)} />;
 
-  const blocked = new Set(blackouts.data.all);
-  const locked = new Set(blackouts.data.seeded);
-  const booked = new Set((bookings.data ?? []).filter((b) => !b.cancelledAt && b.availability !== "UNAVAILABLE").map((b) => b.eventDate));
+  const entries = new Map(blackouts.data.entries.map((e) => [e.date, e]));
+  const canEdit = blackouts.data.selfEdit;
+  const blocked = new Set(blackouts.data.entries.filter((e) => e.source !== "booking").map((e) => e.date));
+  const locked = new Set(blackouts.data.entries.filter((e) => e.source === "manager").map((e) => e.date));
+  // Confirmed bookings hold their date; open requests show too so the artist doesn't block over them.
+  const booked = new Set([
+    ...blackouts.data.entries.filter((e) => e.source === "booking").map((e) => e.date),
+    ...(bookings.data ?? []).filter((b) => !b.cancelledAt && b.availability !== "UNAVAILABLE").map((b) => b.eventDate),
+  ]);
   const shift = (delta: number) =>
     setCursor(({ year, month }) => {
       const next = new Date(Date.UTC(year, month + delta, 1));
@@ -85,16 +91,18 @@ function Calendar() {
             const isBlocked = blocked.has(date);
             const isBooked = booked.has(date);
             const isLocked = locked.has(date);
-            const label = `${day} ${monthLabel.format(new Date(Date.UTC(cursor.year, cursor.month, 15)))}${isBooked ? ", booking" : ""}${isBlocked ? ", blocked" : ""}`;
+            const note = entries.get(date)?.note;
+            const label = `${day} ${monthLabel.format(new Date(Date.UTC(cursor.year, cursor.month, 15)))}${isBooked ? ", booking" : ""}${isBlocked ? ", blocked" : ""}${isLocked ? " by your manager" : ""}${note ? ` (${note})` : ""}`;
             return (
               <button
                 key={date}
                 type="button"
                 aria-label={label}
+                title={label}
                 aria-pressed={isBlocked}
-                disabled={past || isBooked || isLocked || toggle.isPending}
+                disabled={!canEdit || past || isBooked || isLocked || toggle.isPending}
                 onClick={() => toggle.mutate({ date, on: !isBlocked })}
-                className={`relative aspect-square rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed ${
+                className={`relative aspect-square rounded-lg text-sm font-medium transition-colors disabled:cursor-default ${
                   isBooked
                     ? "bg-emerald-100 text-emerald-900"
                     : isBlocked
@@ -116,7 +124,9 @@ function Calendar() {
         <div className="rounded-card border border-line bg-white p-5">
           <h2 className="font-display font-semibold text-ink">How it works</h2>
           <p className="mt-2 leading-relaxed text-muted">
-            Tap a date to block it. Clients searching for that date won't see you. Tap again to unblock.
+            {canEdit
+              ? "Tap a date to block it. Clients searching for that date won't see you, and no new requests come in for it. Tap again to unblock."
+              : "Your manager looks after your calendar. Ask them to block or free a date."}
           </p>
           <ul className="mt-4 space-y-2">
             <Legend className="bg-ink" label="Blocked by you" />

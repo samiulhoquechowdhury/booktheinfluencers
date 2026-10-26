@@ -10,7 +10,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Plus, Search, X } fr
 import { EnquiryInputSchema, type EnquiryFormValues, type EnquiryInput } from "@repo/schemas";
 import { toIstDateKey } from "@repo/utils";
 import { BUDGET_BANDS, CITIES, EVENT_TYPES, LANGUAGES } from "@repo/mock/catalogue/data";
-import { api, errorMessage } from "@/lib/api/client";
+import { ApiError, api, errorMessage } from "@/lib/api/client";
 import { keys, useSession, useTalentSearch, useTalentSummaries } from "@/lib/api/hooks";
 import { feeBand } from "@/lib/format";
 import { OtpForm } from "@/components/auth/otp-form";
@@ -55,7 +55,7 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
       gstin: "",
     },
   });
-  const { register, formState, trigger, control, setValue, getValues, handleSubmit } = form;
+  const { register, formState, trigger, control, setValue, getValues, handleSubmit, setError } = form;
   const errors = formState.errors;
   const selected = useWatch({ control, name: "talentSlugs" }) ?? [];
 
@@ -64,6 +64,14 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
     onSuccess: (result) => {
       void client.invalidateQueries({ queryKey: keys.bookings });
       setDone(result);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    // AVL-4: an artist is blocked on that date — take the customer back to the date with the reason.
+    onError: (error) => {
+      if (!(error instanceof ApiError) || error.code !== "DATE_BLOCKED") return;
+      setVerifying(false);
+      setStep(0);
+      setError("eventDate", { message: error.message }, { shouldFocus: true });
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
   });

@@ -170,6 +170,17 @@ export class TalentAdminService {
     });
   }
 
+  /** TAL-3: whether the artist can edit their own calendar from the portal. */
+  async setSelfEdit(user: AuthUser, slug: string, selfEdit: boolean) {
+    this.require(user, "TALENT_MANAGER");
+    await this.prisma.db.$transaction(async (tx) => {
+      const talent = await tx.talent.findUnique({ where: { slug } });
+      if (!talent) throw notFound("Talent");
+      await tx.talent.update({ where: { id: talent.id }, data: { blackoutSelfEdit: selfEdit } });
+      await this.audit(tx, user, "talent.calendarSelfEdit", slug, selfEdit ? "Artist can edit their calendar" : "Calendar managed by the talent team");
+    });
+  }
+
   private async categoryIds(slugs: string[]) {
     const rows = await this.prisma.db.category.findMany({ where: { slug: { in: slugs } } });
     if (rows.length !== new Set(slugs).size) throw new DomainError("VALIDATION", "Unknown category");

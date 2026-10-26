@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post } from "@nestjs/common";
 import { z } from "zod";
-import { LineItemTypeSchema } from "@repo/schemas";
+import { BlackoutNoteSchema, LineItemTypeSchema } from "@repo/schemas";
 import { LEAD_STAGES } from "@repo/utils";
 import { jsonSafe } from "../common/json";
 import { parse } from "../common/validate";
@@ -148,8 +148,8 @@ export class StaffController {
 
   @Post("talents/:slug/blackouts/:date")
   @HttpCode(204)
-  block(@CurrentUser() user: AuthUser, @Param("slug") slug: string, @Param("date") date: string) {
-    return this.staff.setBlackout(user, slug, parse(DateParam, date), true);
+  block(@CurrentUser() user: AuthUser, @Param("slug") slug: string, @Param("date") date: string, @Body() body: unknown) {
+    return this.staff.setBlackout(user, slug, parse(DateParam, date), true, parse(BlackoutNoteSchema, body ?? {}).note);
   }
 
   @Delete("talents/:slug/blackouts/:date")

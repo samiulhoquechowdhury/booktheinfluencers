@@ -18,7 +18,8 @@ import {
   postTalentMessage,
   quotesOf,
   runDemoAction,
-  setBlackout,
+  assertDateOpen,
+  setCalendarDate,
   transitionLead,
   type DemoAction,
 } from "./server";
@@ -79,6 +80,7 @@ export function addTalentToLead(db: MockDb, actor: StaffUser, leadId: string, sl
   const lead = mustLead(db, leadId);
   if (!TALENTS.some((t) => t.slug === slug)) throw new ApiError("NOT_FOUND", "Unknown artist");
   if (bookingsOf(db, lead.id).some((b) => b.talentSlug === slug)) throw new ApiError("DUPLICATE", "Already on this lead");
+  assertDateOpen(db, [slug], lead.eventDate);
   db.bookings.push({
     id: newId("bkg"),
     leadId: lead.id,
@@ -306,10 +308,17 @@ export function setApplicationStatus(db: MockDb, actor: StaffUser, applicationId
   audit(db, actor, "application.status", "Application", application.ref, `${application.stageName} → ${status}`);
 }
 
-export function staffSetBlackout(db: MockDb, actor: StaffUser, slug: string, date: string, on: boolean) {
+export function staffSetBlackout(db: MockDb, actor: StaffUser, slug: string, date: string, on: boolean, note?: string) {
   requireRole(actor, "TALENT_MANAGER");
-  setBlackout(db, slug, date, on);
-  audit(db, actor, on ? "blackout.add" : "blackout.remove", "Talent", slug, date);
+  setCalendarDate(db, slug, date, on, "manager", note);
+  audit(db, actor, on ? "blackout.add" : "blackout.remove", "Talent", slug, note ? `${date} — ${note}` : date);
+}
+
+/** TAL-3: whether the artist may edit their own calendar. */
+export function setCalendarSelfEdit(db: MockDb, actor: StaffUser, slug: string, selfEdit: boolean) {
+  requireRole(actor, "TALENT_MANAGER");
+  db.calendarSelfEdit[slug] = selfEdit;
+  audit(db, actor, "talent.calendarSelfEdit", "Talent", slug, selfEdit ? "Artist can edit their calendar" : "Calendar managed by the talent team");
 }
 
 // ---------- Analytics (ANA-1, ANA-3) ----------

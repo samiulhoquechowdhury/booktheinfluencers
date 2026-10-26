@@ -1,5 +1,6 @@
 import type { MockDb } from "./types";
 import { buildSeed } from "./seed";
+import { seedCalendar } from "./server";
 
 // Browser-only persistence for the mock API. Bump the key when the record shapes change.
 const DB_KEY = "btf.mock.db.v1";
@@ -39,6 +40,14 @@ function upgrade(db: MockDb): MockDb {
   db.notificationsSeenAt ??= {};
   db.audit ??= [];
   db.talentRecords ??= {};
+  if (!db.calendar) {
+    // Before the calendar store: onboarding dates came from the seed and the rest were the artist's.
+    const legacy = (db as { blackouts?: Record<string, string[]> }).blackouts ?? {};
+    db.calendar = seedCalendar();
+    for (const [slug, dates] of Object.entries(legacy))
+      for (const date of dates) if (!db.calendar[slug]?.some((r) => r.date === date)) (db.calendar[slug] ??= []).push({ date, source: "artist", note: null, bookingId: null });
+  }
+  db.calendarSelfEdit ??= {};
   return db;
 }
 

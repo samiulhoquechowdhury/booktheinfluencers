@@ -6,6 +6,7 @@ import { CurrentUser, Roles, STAFF_ROLES, type AuthUser } from "../auth/guard";
 import { TalentAdminService } from "./talent-admin.service";
 
 const Status = z.object({ status: ProfileStatusSchema });
+const SelfEdit = z.object({ selfEdit: z.boolean() });
 const Verification = z.object({ verification: VerificationStatusSchema });
 
 /** ADM-1…5. Reads for any staff role; changes are role-checked in TalentAdminService. */
@@ -46,6 +47,12 @@ export class TalentAdminController {
   @HttpCode(204)
   addRep(@CurrentUser() user: AuthUser, @Param("slug") slug: string, @Body() body: unknown) {
     return this.talents.addRep(user, slug, parse(RepSchema, body));
+  }
+
+  @Put("talents/:slug/calendar")
+  @HttpCode(204)
+  calendar(@CurrentUser() user: AuthUser, @Param("slug") slug: string, @Body() body: unknown) {
+    return this.talents.setSelfEdit(user, slug, parse(SelfEdit, body).selfEdit);
   }
 
   @Post("reps/:id/verification")

@@ -5,6 +5,7 @@ import { TalentBookingSchema } from "@repo/schemas";
 import { DomainError, notFound } from "../common/errors";
 import { iso, paise, parse } from "../common/validate";
 import { CurrentUser, Roles, type AuthUser } from "../auth/guard";
+import { calendarOf } from "./calendar";
 import { PrismaService } from "../prisma/prisma.service";
 import { MessageBody, toMessage } from "../me/me.controller";
 
@@ -79,9 +80,7 @@ export class TalentPortalController {
   /** TAL-3 / AVL-4 */
   @Get("blackouts")
   async blackouts(@CurrentUser() user: AuthUser) {
-    const talent = await this.talentOf(user);
-    const rows = await this.prisma.db.blackout.findMany({ where: { talentId: talent.id }, orderBy: { date: "asc" } });
-    return { seeded: rows.filter((r) => r.locked).map((r) => r.date), all: rows.map((r) => r.date) };
+    return calendarOf(this.prisma.db, await this.talentOf(user));
   }
 
   @Put("blackouts/:date")
@@ -90,7 +89,7 @@ export class TalentPortalController {
     const date = parse(DateParam, raw);
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
     if (date < today) throw new DomainError("VALIDATION", "Blackout dates must be in the future");
-    const talent = await this.talentOf(user);
+    const talent = await this.editableTalent(user);
     await this.prisma.db.blackout.upsert({ where: { talentId_date: { talentId: talent.id, date } }, create: { talentId: talent.id, date }, update: {} });
   }
 
@@ -98,10 +97,18 @@ export class TalentPortalController {
   @HttpCode(204)
   async unblock(@CurrentUser() user: AuthUser, @Param("date") raw: string) {
     const date = parse(DateParam, raw);
-    const talent = await this.talentOf(user);
+    const talent = await this.editableTalent(user);
     const row = await this.prisma.db.blackout.findUnique({ where: { talentId_date: { talentId: talent.id, date } } });
+    if (row?.bookingId) throw new DomainError("BOOKED", "You have a confirmed booking on this date", 409);
     if (row?.locked) throw new DomainError("LOCKED", "This date was set by your manager — ask them to clear it", 409);
     await this.prisma.db.blackout.deleteMany({ where: { talentId: talent.id, date } });
+  }
+
+  /** TAL-3: the talent team can switch self-editing off for an artist. */
+  private async editableTalent(user: AuthUser) {
+    const talent = await this.talentOf(user);
+    if (!talent.blackoutSelfEdit) throw new DomainError("FORBIDDEN", "Your manager looks after your calendar — ask them to change a date", 403);
+    return talent;
   }
 
   private async talentOf(user: AuthUser) {

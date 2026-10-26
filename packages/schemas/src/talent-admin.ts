@@ -83,3 +83,19 @@ export function publishBlockers(t: { reps: { verification: VerificationStatus }[
     ...(t.categories.length ? [] : ["Pick a category"]),
   ];
 }
+
+// ---------- Calendar (AVL-4, TAL-3) ----------
+
+export const BlackoutNoteSchema = z.object({ note: z.string().trim().max(120, "Keep the note under 120 characters").optional() });
+
+/** Who put a date on the calendar: the talent team (locked), the artist, or a confirmed booking. */
+export type CalendarEntry = { date: string; source: "manager" | "artist" | "booking"; note: string | null; ref: string | null; leadId: string | null };
+
+export type TalentCalendar = {
+  /** Locked dates (talent team or booking). Kept for older screens. */
+  seeded: string[];
+  all: string[];
+  entries: CalendarEntry[];
+  /** TAL-3: whether the artist may edit their own dates. */
+  selfEdit: boolean;
+};

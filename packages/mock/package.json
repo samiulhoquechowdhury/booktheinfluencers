@@ -2,6 +2,7 @@
   "name": "@repo/mock",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "description": "In-browser mock of the booking API: catalogue, rules, store and serializers. Shared by web and admin until apps/api is wired in.",
   "exports": {
     "./catalogue/*": "./src/catalogue/*.ts",

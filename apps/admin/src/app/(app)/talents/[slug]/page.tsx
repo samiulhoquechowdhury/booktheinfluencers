@@ -4,15 +4,15 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, Check, ExternalLink, Lock, Pencil, Plus, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, ExternalLink, Pencil, Plus, X } from "lucide-react";
 import { RateCardSchema, RepSchema, type ProfileStatus, type TalentAdminDetail } from "@repo/schemas";
-import { formatDate, toIstDateKey } from "@repo/utils";
 import { CATEGORIES } from "@repo/mock/catalogue/data";
 import { USING_API, api, can, errorMessage, type StaffUser } from "@/lib/api";
-import { PROFILE_STATUS_LABELS, inr, inrCompact, istDate, percent, profileTone, toPaise, toRupees, verificationTone } from "@/lib/format";
+import { PROFILE_STATUS_LABELS, inr, inrCompact, percent, profileTone, toPaise, toRupees, verificationTone } from "@/lib/format";
 import { keys, useStaffMutation, useStaffSession } from "@/lib/hooks";
 import { Card, Failure, Loading, Pill, inputClass } from "@/components/ui";
 import { TalentForm } from "@/components/talent/talent-form";
+import { CalendarCard } from "@/components/talent/calendar-card";
 
 const REPRESENTATION: Record<TalentAdminDetail["representationType"], string> = {
   AGENCY_MANAGED: "Agency managed",
@@ -46,7 +46,7 @@ export default function TalentDetailPage() {
         <div className="space-y-5">
           <RateCardPanel talent={t} staff={staff} />
           <RepsPanel talent={t} staff={staff} />
-          <Blackouts slug={t.slug} manage={can(staff, "TALENT_MANAGER")} />
+          <CalendarCard slug={t.slug} manage={can(staff, "TALENT_MANAGER")} />
         </div>
       </div>
     </div>
@@ -318,57 +318,6 @@ function RepsPanel({ talent: t, staff }: { talent: TalentAdminDetail; staff: Sta
           <p className="text-xs text-muted">New representatives start as KYC pending. Verify them once their documents are checked.</p>
         </form>
       )}
-    </Card>
-  );
-}
-
-function Blackouts({ slug, manage }: { slug: string; manage: boolean }) {
-  const blackouts = useQuery({ queryKey: keys.blackouts(slug), queryFn: () => api.talents.blackouts(slug) });
-  const [date, setDate] = useState("");
-  const toggle = useStaffMutation(({ d, on }: { d: string; on: boolean }) => api.talents.setBlackout(slug, d, on), "Calendar updated");
-
-  return (
-    <Card title="Blackout dates">
-      {manage && (
-        <form
-          className="mb-4 flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            toggle.mutate({ d: date, on: true }, { onSuccess: () => setDate("") });
-          }}
-        >
-          <input type="date" min={toIstDateKey(new Date())} value={date} onChange={(e) => setDate(e.target.value)} required aria-label="Date to block" className={inputClass} />
-          <button type="submit" disabled={!date || toggle.isPending} className="btn btn-dark btn-sm disabled:opacity-50">Block date</button>
-        </form>
-      )}
-      {blackouts.isPending ? (
-        <Loading />
-      ) : blackouts.error ? (
-        <Failure message={errorMessage(blackouts.error)} onRetry={() => blackouts.refetch()} />
-      ) : blackouts.data.all.length === 0 ? (
-        <p className="text-sm text-muted">No blocked dates.</p>
-      ) : (
-        <ul className="flex flex-wrap gap-2">
-          {blackouts.data.all.map((d) => {
-            const seeded = blackouts.data.seeded.includes(d);
-            return (
-              <li key={d} className="flex items-center gap-1.5 rounded-full bg-cream px-3 py-1 text-sm text-ink">
-                {formatDate(istDate(d))}
-                {seeded ? (
-                  <Lock className="size-3 text-muted" aria-label="Set at onboarding" />
-                ) : (
-                  manage && (
-                    <button type="button" onClick={() => toggle.mutate({ d, on: false })} aria-label={`Unblock ${d}`} className="text-muted hover:text-rose-700">
-                      <X className="size-3.5" aria-hidden />
-                    </button>
-                  )
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <p className="mt-3 text-xs text-muted">Blocked dates hide the artist from date searches. The artist can also block dates from their portal.</p>
     </Card>
   );
 }

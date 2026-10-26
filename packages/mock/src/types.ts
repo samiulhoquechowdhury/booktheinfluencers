@@ -154,7 +154,10 @@ export type MockDb = {
   payouts: PayoutRec[];
   activities: ActivityRec[];
   favourites: Record<string, string[]>;
-  blackouts: Record<string, string[]>;
+  /** AVL-4: per talent slug, the dates on their calendar. */
+  calendar: Record<string, CalendarRec[]>;
+  /** TAL-3: artists whose calendar only the talent team can edit (absent = artist may edit). */
+  calendarSelfEdit: Record<string, boolean>;
   /** Webhook idempotency (PAY-3): ids already processed. */
   processedWebhooks: string[];
   messages: MessageRec[];
@@ -170,6 +173,9 @@ export type MockDb = {
 };
 
 export type TalentRecord = Omit<TalentAdminDetail, "bookingCount" | "publishBlockers"> & { createdAt: string };
+
+/** A blocked date: set by the talent team (locked), the artist, or held by a confirmed booking. */
+export type CalendarRec = { date: string; source: "manager" | "artist" | "booking"; note: string | null; bookingId: string | null };
 
 export type AuditRec = {
   id: string;

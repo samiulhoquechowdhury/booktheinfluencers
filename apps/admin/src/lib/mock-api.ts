@@ -4,7 +4,6 @@
 
 import { allowedNextStages, type LeadStage } from "@repo/utils";
 import { TALENTS } from "@repo/mock/catalogue/data";
-import { BLACKOUT_SEED } from "@repo/mock/catalogue/blackouts";
 import { DEMO_OTP, STAFF_DEMO_PASSWORD, STAFF_USERS, internalFor, type StaffUser } from "@repo/mock/internal";
 import {
   ApiError,
@@ -13,7 +12,7 @@ import {
   leadMessages,
   milestonesOf,
   quotesOf,
-  talentBlackouts,
+  calendarFor,
   talentMessages,
   type DemoAction,
 } from "@repo/mock/server";
@@ -34,10 +33,10 @@ import {
   seesFinance,
   sendPaymentLink,
   setApplicationStatus,
+  setCalendarSelfEdit,
   staffSetBlackout,
   can,
   type QuoteDraft,
-  type QuoteDraftLine,
 } from "@repo/mock/staff";
 import { loadDb, mutate, readStaffId, writeStaffId } from "@repo/mock/store";
 import { addRep, allTalentRecords, createTalent, setRateCard, setRepVerification, setTalentStatus, talentDetail, updateTalent } from "@repo/mock/talent-admin";
@@ -248,8 +247,9 @@ export const mockApi = {
     setRateCard: (slug: string, card: RateCardInput) => call(() => mutate((db) => setRateCard(db, actor(), slug, card))),
     addRep: (slug: string, rep: RepInput) => call(() => mutate((db) => addRep(db, actor(), slug, rep))),
     setRepVerification: (repId: string, verification: VerificationStatus) => call(() => mutate((db) => setRepVerification(db, actor(), repId, verification))),
-    blackouts: (slug: string) => call(() => ({ seeded: BLACKOUT_SEED[slug] ?? [], all: talentBlackouts(loadDb(), slug, BLACKOUT_SEED[slug]) })),
-    setBlackout: (slug: string, date: string, on: boolean) => call(() => mutate((db) => staffSetBlackout(db, actor(), slug, date, on))),
+    blackouts: (slug: string) => call(() => calendarFor(loadDb(), slug)),
+    setBlackout: (slug: string, date: string, on: boolean, note?: string) => call(() => mutate((db) => staffSetBlackout(db, actor(), slug, date, on, note))),
+    setSelfEdit: (slug: string, selfEdit: boolean) => call(() => mutate((db) => setCalendarSelfEdit(db, actor(), slug, selfEdit))),
   },
 
   inbox: {

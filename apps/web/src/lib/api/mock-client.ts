@@ -1,7 +1,6 @@
 "use client";
 
 import { EnquiryInputSchema, INDIAN_MOBILE, type EnquiryFormValues } from "@repo/schemas";
-import { BLACKOUT_SEED } from "@repo/mock/catalogue/blackouts";
 import { ACCOUNT_MANAGER, DEMO_OTP, TALENT_LOGINS } from "@repo/mock/internal";
 import {
   ApiError,
@@ -16,13 +15,13 @@ import {
   requestCancellation,
   requestQuoteChanges,
   runDemoAction,
-  setBlackout,
+  setCalendarDate,
   startCheckout,
   submitContactRequest,
   submitEnquiry,
   submitTalentApplication,
   subscribeNewsletter,
-  talentBlackouts,
+  calendarFor,
   talentMessages,
   type DemoAction,
 } from "@repo/mock/server";
@@ -282,23 +281,9 @@ export const mockApi = {
         return toTalentBooking(db, booking);
       }),
 
-    blackouts: () =>
-      call(() => {
-        const db = loadDb();
-        const { slug } = currentTalent(db);
-        return { seeded: BLACKOUT_SEED[slug] ?? [], all: talentBlackouts(db, slug, BLACKOUT_SEED[slug]) };
-      }),
+    blackouts: () => call(() => calendarFor(loadDb(), currentTalent(loadDb()).slug)),
 
-    setBlackout: (date: string, on: boolean) =>
-      call(() =>
-        mutate((db) => {
-          const { slug } = currentTalent(db);
-          if (!on && BLACKOUT_SEED[slug]?.includes(date)) {
-            throw new ApiError("LOCKED", "This date was set by your manager — ask them to clear it");
-          }
-          setBlackout(db, slug, date, on);
-        }),
-      ),
+    setBlackout: (date: string, on: boolean) => call(() => mutate((db) => setCalendarDate(db, currentTalent(db).slug, date, on, "artist"))),
   },
 
   messages: {

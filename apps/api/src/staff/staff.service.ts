@@ -1,10 +1,12 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { ApplicationStatus, LeadStage, LineItemType, Prisma, Role } from "@repo/db";
+import type { TalentCalendar } from "@repo/schemas";
 import { allowedNextStages, computeQuoteTotals } from "@repo/utils";
 import { DomainError, forbidden, notFound } from "../common/errors";
 import type { AuthUser } from "../auth/guard";
 import { PrismaService } from "../prisma/prisma.service";
-import { activity, evaluateConfirmation, transitionLead } from "../bookings/domain";
+import { calendarOf } from "../talent/calendar";
+import { activity, assertDateOpen, evaluateConfirmation, releaseDate, transitionLead } from "../bookings/domain";
 import { notifyCustomer, notifyStaff } from "@repo/db";
 
 type Tx = Prisma.TransactionClient;
@@ -156,8 +158,10 @@ export class StaffService {
       const [lead, talent] = await Promise.all([tx.lead.findUnique({ where: { id: leadId } }), tx.talent.findUnique({ where: { slug } })]);
       if (!lead) throw notFound("Lead");
       if (!talent) throw notFound("Talent");
+      if (talent.status !== "PUBLISHED") throw new DomainError("NOT_BOOKABLE", `${talent.stageName} isn't live yet — publish the profile first`, 409);
       const existing = await tx.booking.findUnique({ where: { leadId_talentId: { leadId, talentId: talent.id } } });
       if (existing) throw new DomainError("DUPLICATE", "Already on this lead", 409);
+      await assertDateOpen(tx, [talent.id], lead.eventDate);
       await tx.booking.create({ data: { leadId, talentId: talent.id } });
       await activity(tx, leadId, `${talent.stageName} added to your shortlist`, "We'll check their availability for your date.");
       await this.audit(tx, user, "lead.addTalent", "Lead", lead.ref, talent.stageName);
@@ -267,6 +271,7 @@ export class StaffService {
           const reason = note?.trim();
           if (!reason) throw new DomainError("VALIDATION", "A cancellation reason is required");
           await tx.booking.update({ where: { id: bookingId }, data: { cancelledAt: new Date(), cancelReason: reason } });
+          await releaseDate(tx, bookingId);
           await tx.paymentMilestone.updateMany({ where: { bookingId, status: { notIn: ["PAID", "REFUNDED"] } }, data: { status: "CANCELLED" } });
           const live = await tx.booking.count({ where: { leadId, cancelledAt: null } });
           if (live === 0 && (booking.lead.stage === "ADVANCE_PENDING" || booking.lead.stage === "CONFIRMED")) {
@@ -493,22 +498,25 @@ export class StaffService {
     }));
   }
 
-  async blackouts(slug: string) {
-    const talent = await this.prisma.db.talent.findUnique({ where: { slug }, include: { blackouts: { orderBy: { date: "asc" } } } });
+  async blackouts(slug: string): Promise<TalentCalendar> {
+    const talent = await this.prisma.db.talent.findUnique({ where: { slug }, select: { id: true, blackoutSelfEdit: true } });
     if (!talent) throw notFound("Talent");
-    return { seeded: talent.blackouts.filter((b) => b.locked).map((b) => b.date), all: talent.blackouts.map((b) => b.date) };
+    return calendarOf(this.prisma.db, talent);
   }
 
-  async setBlackout(user: AuthUser, slug: string, date: string, on: boolean) {
+  /** AVL-4: dates set here are locked — the artist can't clear them from the portal. */
+  async setBlackout(user: AuthUser, slug: string, date: string, on: boolean, note?: string) {
     this.require(user, "TALENT_MANAGER");
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
     if (on && date < today) throw new DomainError("VALIDATION", "Blackout dates must be in the future");
     await this.prisma.db.$transaction(async (tx) => {
       const talent = await tx.talent.findUnique({ where: { slug } });
       if (!talent) throw notFound("Talent");
-      if (on) await tx.blackout.upsert({ where: { talentId_date: { talentId: talent.id, date } }, create: { talentId: talent.id, date }, update: {} });
+      const existing = await tx.blackout.findUnique({ where: { talentId_date: { talentId: talent.id, date } }, include: { booking: { include: { lead: true } } } });
+      if (existing?.booking) throw new DomainError("BOOKED", `This date is held by booking ${existing.booking.lead.ref}. Cancel that booking to free it.`, 409);
+      if (on) await tx.blackout.upsert({ where: { talentId_date: { talentId: talent.id, date } }, create: { talentId: talent.id, date, locked: true, note: note || null }, update: { locked: true, note: note || null } });
       else await tx.blackout.deleteMany({ where: { talentId: talent.id, date } });
-      await this.audit(tx, user, on ? "blackout.add" : "blackout.remove", "Talent", slug, date);
+      await this.audit(tx, user, on ? "blackout.add" : "blackout.remove", "Talent", slug, note ? `${date} — ${note}` : date);
     });
   }
 

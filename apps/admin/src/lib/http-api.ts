@@ -2,7 +2,7 @@
 
 import { ApiError } from "@repo/mock/server";
 import { STAFF_ROLES, type StaffRole, type StaffUser } from "@repo/mock/internal";
-import type { TalentAdminDetail } from "@repo/schemas";
+import type { TalentAdminDetail, TalentCalendar } from "@repo/schemas";
 import type { mockApi, LeadDetail, LeadRow } from "./mock-api";
 
 // HTTP transport for the staff API (/v1/admin). Same interface as mock-api.ts, so the screens
@@ -217,8 +217,9 @@ export const httpApi: typeof mockApi = {
     setRateCard: (slug, card) => request(`/admin/talents/${id(slug)}/rate-card`, { method: "PUT", body: card }),
     addRep: (slug, rep) => post(`/admin/talents/${id(slug)}/reps`, rep),
     setRepVerification: (repId, verification) => post(`/admin/reps/${id(repId)}/verification`, { verification }),
-    blackouts: (slug) => request(`/admin/talents/${id(slug)}/blackouts`),
-    setBlackout: (slug, date, on) => request(`/admin/talents/${id(slug)}/blackouts/${id(date)}`, { method: on ? "POST" : "DELETE" }),
+    blackouts: (slug) => request<TalentCalendar>(`/admin/talents/${id(slug)}/blackouts`),
+    setBlackout: (slug, date, on, note) => request(`/admin/talents/${id(slug)}/blackouts/${id(date)}`, { method: on ? "POST" : "DELETE", ...(on && { body: { note } }) }),
+    setSelfEdit: (slug, selfEdit) => request(`/admin/talents/${id(slug)}/calendar`, { method: "PUT", body: { selfEdit } }),
   },
 
   inbox: {
