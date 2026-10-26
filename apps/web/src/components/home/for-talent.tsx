@@ -39,7 +39,7 @@ export function ForTalent() {
             ))}
           </ul>
 
-          <a href="/for-talent" className="btn btn-gold mt-10">
+          <a href="/for-talent/apply" className="btn btn-gold mt-10">
             Join as talent
             <ArrowRight aria-hidden />
           </a>

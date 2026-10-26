@@ -7,10 +7,15 @@ import {
   contractOf,
   handleEsignWebhook,
   handleGatewayWebhook,
+  leadMessages,
   milestonesOf,
+  postLeadMessage,
   quotesOf,
   runDemoAction,
+  submitContactRequest,
   submitEnquiry,
+  submitTalentApplication,
+  subscribeNewsletter,
   transitionLead,
 } from "./server";
 import type { BookingRec, MockDb } from "./types";
@@ -33,6 +38,11 @@ function emptyDb(): MockDb {
     favourites: {},
     blackouts: {},
     processedWebhooks: [],
+    messages: [],
+    contactRequests: [],
+    talentApplications: [],
+    newsletter: [],
+    notificationsSeenAt: {},
   };
 }
 
@@ -166,5 +176,50 @@ describe("booking flow", () => {
     const [latest, previous] = quotesOf(db, booking.id);
     expect(latest).toMatchObject({ version: 2, status: "SENT" });
     expect(previous).toMatchObject({ version: 1, status: "SUPERSEDED" });
+  });
+});
+
+describe("messages, contact, applications and newsletter", () => {
+  it("keeps a thread per brief and records the manager on first staff reply", () => {
+    const lead = db.leads[0]!;
+    postLeadMessage(db, lead.id, "customer", "Test", "  Hello there  ");
+    postLeadMessage(db, lead.id, "staff", "Riya Sharma", "Hi! Happy to help.");
+    const thread = leadMessages(db, lead.id);
+    expect(thread.map((m) => [m.author, m.body])).toEqual([
+      ["customer", "Hello there"],
+      ["staff", "Hi! Happy to help."],
+    ]);
+    expect(lead.ownerName).toBe("Riya Sharma");
+  });
+
+  it("rejects empty messages", () => {
+    expect(() => postLeadMessage(db, db.leads[0]!.id, "customer", "Test", "   ")).toThrow(ApiError);
+  });
+
+  it("files contact requests with a reference", () => {
+    const request = submitContactRequest(db, { name: "Asha", phone: "9876501234", email: "", topic: "Partnerships", message: "We run a venue in Pune." });
+    expect(request.ref).toMatch(/^CR-\d{6}$/);
+    expect(() => submitContactRequest(db, { name: "Asha", phone: "123", email: "", topic: "x", message: "Long enough message" })).toThrow(/mobile/);
+  });
+
+  it("files artist applications once per phone", () => {
+    const input = {
+      stageName: "The Night Owls",
+      category: "Singers",
+      city: "Pune",
+      phone: "9876509876",
+      email: "owls@example.com",
+      representation: "I manage my own bookings",
+      links: "https://youtube.com/@owls",
+      about: "Five-piece band playing retro Bollywood.",
+    };
+    expect(submitTalentApplication(db, input).ref).toMatch(/^AP-\d{6}$/);
+    expect(() => submitTalentApplication(db, input)).toThrow(/already have your application/);
+  });
+
+  it("subscribes each email once, case-insensitively", () => {
+    expect(subscribeNewsletter(db, "Neha@Example.com")).toEqual({ alreadySubscribed: false });
+    expect(subscribeNewsletter(db, "neha@example.com ")).toEqual({ alreadySubscribed: true });
+    expect(() => subscribeNewsletter(db, "not-an-email")).toThrow(ApiError);
   });
 });

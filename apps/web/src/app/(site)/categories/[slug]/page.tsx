@@ -6,13 +6,16 @@ import { getCategory, parseFilters } from "@/lib/catalogue/query";
 import { PageIntro, Spinner } from "@/components/ui/feedback";
 import { TalentListing } from "@/components/talent/talent-listing";
 
+type Props = PageProps<"/categories/[slug]">;
+
 export function generateStaticParams() {
   return CATEGORIES.map((category) => ({ slug: category.slug }));
 }
 
-export async function generateMetadata({ params }: PageProps<"/categories/[slug]">): Promise<Metadata> {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const category = getCategory((await params).slug);
-  if (!category) return {};
+  // Runs before streaming starts, so unknown slugs get a real 404 status.
+  if (!category) notFound();
   return {
     title: `Book ${category.name.toLowerCase()} for events`,
     description: `${category.blurb} Verified representation, written contracts and protected payments.`,
@@ -20,25 +23,29 @@ export async function generateMetadata({ params }: PageProps<"/categories/[slug]
   };
 }
 
-export default async function CategoryPage({ params, searchParams }: PageProps<"/categories/[slug]">) {
-  const category = getCategory((await params).slug);
-  if (!category) notFound();
-
+/** URL data is read inside Suspense so navigation shows the shell instantly. */
+export default function CategoryPage({ params, searchParams }: Props) {
   return (
     <div className="shell py-12 sm:py-16">
-      <PageIntro eyebrow="Category" title={`Book ${category.name.toLowerCase()}`}>
-        {category.blurb}
-      </PageIntro>
-      <div className="mt-10">
-        <Suspense fallback={<Spinner label="Finding artists" />}>
-          <Results slug={category.slug} searchParams={searchParams} />
-        </Suspense>
-      </div>
+      <Suspense fallback={<Spinner label="Finding artists" />}>
+        <Category params={params} searchParams={searchParams} />
+      </Suspense>
     </div>
   );
 }
 
-async function Results({ slug, searchParams }: { slug: string; searchParams: PageProps<"/categories/[slug]">["searchParams"] }) {
+async function Category({ params, searchParams }: Pick<Props, "params" | "searchParams">) {
+  const category = getCategory((await params).slug);
+  if (!category) notFound();
   const filters = parseFilters(await searchParams);
-  return <TalentListing filters={filters} basePath={`/categories/${slug}`} locked={{ category: slug }} />;
+  return (
+    <>
+      <PageIntro eyebrow="Category" title={`Book ${category.name.toLowerCase()}`}>
+        {category.blurb}
+      </PageIntro>
+      <div className="mt-10">
+        <TalentListing filters={filters} basePath={`/categories/${category.slug}`} locked={{ category: category.slug }} />
+      </div>
+    </>
+  );
 }

@@ -509,3 +509,107 @@ export function setBlackout(db: MockDb, slug: string, date: string, on: boolean)
   else current.delete(date);
   db.blackouts[slug] = [...current].sort();
 }
+
+// ---------- Messages (CUS-3) ----------
+
+const MAX_MESSAGE = 2000;
+
+function cleanMessage(body: string) {
+  const text = body.trim();
+  if (!text) throw new ApiError("VALIDATION", "Write a message first");
+  if (text.length > MAX_MESSAGE) throw new ApiError("VALIDATION", `Keep messages under ${MAX_MESSAGE} characters`);
+  return text;
+}
+
+export function leadMessages(db: MockDb, leadId: string) {
+  return db.messages.filter((m) => m.thread.kind === "lead" && m.thread.leadId === leadId).toSorted((a, b) => a.at.localeCompare(b.at));
+}
+
+export function talentMessages(db: MockDb, bookingId: string) {
+  return db.messages
+    .filter((m) => m.thread.kind === "talent" && m.thread.bookingId === bookingId)
+    .toSorted((a, b) => a.at.localeCompare(b.at));
+}
+
+export function postLeadMessage(db: MockDb, leadId: string, author: "customer" | "staff", authorName: string, body: string) {
+  const lead = must(leadOf(db, leadId), "Booking");
+  const message = { id: newId("msg"), thread: { kind: "lead" as const, leadId }, author, authorName, body: cleanMessage(body), at: nowIso() };
+  db.messages.push(message);
+  if (author === "staff" && !lead.ownerName) lead.ownerName = authorName;
+  return message;
+}
+
+export function postTalentMessage(db: MockDb, bookingId: string, author: "talent" | "staff", authorName: string, body: string) {
+  must(db.bookings.find((b) => b.id === bookingId), "Booking");
+  const message = { id: newId("msg"), thread: { kind: "talent" as const, bookingId }, author, authorName, body: cleanMessage(body), at: nowIso() };
+  db.messages.push(message);
+  return message;
+}
+
+// ---------- Contact, applications, newsletter ----------
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const MOBILE = /^[6-9]\d{9}$/;
+
+function requireText(value: string, label: string, min = 2, max = 2000) {
+  const text = value.trim();
+  if (text.length < min) throw new ApiError("VALIDATION", `Enter ${label}`);
+  if (text.length > max) throw new ApiError("VALIDATION", `${label} is too long`);
+  return text;
+}
+
+export function submitContactRequest(
+  db: MockDb,
+  input: { name: string; phone: string; email: string; topic: string; message: string },
+) {
+  if (!MOBILE.test(input.phone)) throw new ApiError("VALIDATION", "Enter a 10-digit Indian mobile number");
+  if (input.email && !EMAIL.test(input.email)) throw new ApiError("VALIDATION", "Enter a valid email");
+  db.seq += 1;
+  const request = {
+    id: newId("ctc"),
+    ref: `CR-${String(db.seq).padStart(6, "0")}`,
+    name: requireText(input.name, "your name", 2, 80),
+    phone: input.phone,
+    email: input.email.trim() || null,
+    topic: requireText(input.topic, "a topic", 2, 60),
+    message: requireText(input.message, "a message", 10),
+    at: nowIso(),
+  };
+  db.contactRequests.push(request);
+  return request;
+}
+
+export function submitTalentApplication(
+  db: MockDb,
+  input: { stageName: string; category: string; city: string; phone: string; email: string; representation: string; links: string; about: string },
+) {
+  if (!MOBILE.test(input.phone)) throw new ApiError("VALIDATION", "Enter a 10-digit Indian mobile number");
+  if (!EMAIL.test(input.email)) throw new ApiError("VALIDATION", "Enter a valid email");
+  const duplicate = db.talentApplications.find((a) => a.phone === input.phone && a.status !== "DECLINED");
+  if (duplicate) throw new ApiError("DUPLICATE", `We already have your application (${duplicate.ref}). Our team will be in touch.`);
+  db.seq += 1;
+  const application = {
+    id: newId("app"),
+    ref: `AP-${String(db.seq).padStart(6, "0")}`,
+    stageName: requireText(input.stageName, "your stage name", 2, 80),
+    category: requireText(input.category, "a category"),
+    city: requireText(input.city, "your base city"),
+    phone: input.phone,
+    email: input.email.trim(),
+    representation: requireText(input.representation, "who manages your bookings"),
+    links: requireText(input.links, "at least one link to your work", 8, 1000),
+    about: requireText(input.about, "a short introduction", 20),
+    status: "NEW" as const,
+    at: nowIso(),
+  };
+  db.talentApplications.push(application);
+  return application;
+}
+
+export function subscribeNewsletter(db: MockDb, email: string) {
+  const clean = email.trim().toLowerCase();
+  if (!EMAIL.test(clean)) throw new ApiError("VALIDATION", "Enter a valid email");
+  if (db.newsletter.some((entry) => entry.email === clean)) return { alreadySubscribed: true };
+  db.newsletter.push({ email: clean, at: nowIso() });
+  return { alreadySubscribed: false };
+}

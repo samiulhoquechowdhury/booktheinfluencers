@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, MessageCircle, Phone } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { formatDateTime, formatDateWithWeekday } from "@repo/utils";
-import { errorMessage } from "@/lib/api/client";
-import { useTalentBooking } from "@/lib/api/hooks";
+import { api, errorMessage } from "@/lib/api/client";
+import { keys, useTalentBooking, useTalentMessages } from "@/lib/api/hooks";
 import { talentStatus } from "@/lib/booking-status";
 import { durationLabel, inr } from "@/lib/format";
 import { ACCOUNT_MANAGER } from "@/lib/mock/internal";
-import { SUPPORT } from "@/lib/site";
+import { MessageThread } from "@/components/messages/message-thread";
 import { ErrorState, Spinner } from "@/components/ui/feedback";
 import { StatusPill } from "@/components/ui/status-pill";
 import { PortalShell } from "./portal-shell";
@@ -78,21 +78,32 @@ function Detail({ bookingId }: { bookingId: string }) {
         </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-white p-5 text-sm">
-        <p className="text-muted">
-          Questions about this booking? Talk to <span className="text-ink">{ACCOUNT_MANAGER.name}</span>.
+      <section aria-labelledby="team-messages" className="mt-5 rounded-card border border-line bg-white p-5 sm:p-6">
+        <h2 id="team-messages" className="font-serif text-xl font-semibold text-ink">
+          Messages with our team
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          Questions about timings, rider or travel? {ACCOUNT_MANAGER.name} coordinates this booking.
         </p>
-        <div className="flex gap-2">
-          <a href={`tel:${ACCOUNT_MANAGER.phone.replace(/\s/g, "")}`} className="btn btn-outline btn-sm">
-            <Phone aria-hidden />
-            Call
-          </a>
-          <a href={`https://wa.me/${SUPPORT.whatsapp}?text=${encodeURIComponent(`Hi, about booking ${booking.ref}`)}`} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">
-            <MessageCircle aria-hidden />
-            WhatsApp
-          </a>
+        <div className="mt-5">
+          <TalentThread bookingId={booking.id} />
         </div>
-      </div>
+      </section>
     </div>
+  );
+}
+
+function TalentThread({ bookingId }: { bookingId: string }) {
+  const query = useTalentMessages(bookingId);
+  return (
+    <MessageThread
+      query={query}
+      queryKey={keys.talentMessages(bookingId)}
+      self="talent"
+      send={(body) => api.messages.sendForTalentBooking(bookingId, body)}
+      demoReply={{ label: "Demo: reply as our team", send: (body) => api.demo.replyAsTeam(bookingId, body) }}
+      emptyText="No messages yet. Ask about timings, rider or travel."
+      placeholder="Write to our team…"
+    />
   );
 }

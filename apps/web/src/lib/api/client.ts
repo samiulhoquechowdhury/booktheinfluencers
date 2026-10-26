@@ -2,25 +2,33 @@
 
 import { EnquiryInputSchema, INDIAN_MOBILE, type EnquiryFormValues } from "@repo/schemas";
 import { BLACKOUT_SEED } from "@/lib/catalogue/blackouts";
-import { DEMO_OTP, TALENT_LOGINS } from "@/lib/mock/internal";
+import { ACCOUNT_MANAGER, DEMO_OTP, TALENT_LOGINS } from "@/lib/mock/internal";
 import {
   ApiError,
   acceptQuote,
   handleEsignWebhook,
   handleGatewayWebhook,
+  leadMessages,
   newId,
+  nowIso,
+  postLeadMessage,
+  postTalentMessage,
   requestCancellation,
   requestQuoteChanges,
   runDemoAction,
   setBlackout,
   startCheckout,
+  submitContactRequest,
   submitEnquiry,
+  submitTalentApplication,
+  subscribeNewsletter,
   talentBlackouts,
+  talentMessages,
   type DemoAction,
 } from "@/lib/mock/server";
 import { toCustomerLead, toTalentBooking } from "@/lib/mock/serializers";
 import { loadDb, mutate, readSessionUserId, resetDb, writeSessionUserId } from "@/lib/mock/store";
-import type { MockDb, UserRec } from "@/lib/mock/types";
+import type { MessageRec, MockDb, UserRec } from "@/lib/mock/types";
 
 // Typed API for the web app. Today it talks to the in-browser mock; the same functions will call
 // the NestJS API (/v1) when NEXT_PUBLIC_API_BASE is set — components don't change.
@@ -303,12 +311,118 @@ export const api = {
       ),
   },
 
+  messages: {
+    /** Customer ↔ booking manager thread for one brief. */
+    forLead: (leadId: string) =>
+      call(() => {
+        const db = loadDb();
+        ownLead(db, leadId);
+        return leadMessages(db, leadId).map(toMessage);
+      }),
+
+    sendForLead: (leadId: string, body: string) =>
+      call(() =>
+        mutate((db) => {
+          const user = currentUser(db);
+          ownLead(db, leadId);
+          return toMessage(postLeadMessage(db, leadId, "customer", user.name, body));
+        }),
+      ),
+
+    /** Talent ↔ our team thread for one booking. */
+    forTalentBooking: (bookingId: string) =>
+      call(() => {
+        const db = loadDb();
+        ownTalentBooking(db, bookingId);
+        return talentMessages(db, bookingId).map(toMessage);
+      }),
+
+    sendForTalentBooking: (bookingId: string, body: string) =>
+      call(() =>
+        mutate((db) => {
+          const { user } = ownTalentBooking(db, bookingId);
+          return toMessage(postTalentMessage(db, bookingId, "talent", user.name, body));
+        }),
+      ),
+  },
+
+  notifications: {
+    list: () =>
+      call(() => {
+        const db = loadDb();
+        const user = currentUser(db);
+        const leads = db.leads.filter((lead) => lead.customerId === user.id);
+        const items = [
+          ...db.activities
+            .filter((a) => !a.internal && leads.some((l) => l.id === a.leadId))
+            .map((a) => ({ id: a.id, at: a.at, title: a.title, body: a.body, href: `/account/bookings/${a.leadId}` })),
+          ...db.messages
+            .filter((m) => m.author === "staff" && m.thread.kind === "lead" && leads.some((l) => m.thread.kind === "lead" && l.id === m.thread.leadId))
+            .map((m) => ({
+              id: m.id,
+              at: m.at,
+              title: `New message from ${m.authorName}`,
+              body: m.body.length > 90 ? `${m.body.slice(0, 90)}…` : m.body,
+              href: `/account/bookings/${m.thread.kind === "lead" ? m.thread.leadId : ""}#messages`,
+            })),
+        ]
+          .toSorted((a, b) => b.at.localeCompare(a.at))
+          .slice(0, 20);
+        const seenAt = db.notificationsSeenAt[user.id] ?? "";
+        return { items, unread: items.filter((item) => item.at > seenAt).length };
+      }),
+
+    markSeen: () =>
+      call(() =>
+        mutate((db) => {
+          db.notificationsSeenAt[currentUser(db).id] = nowIso();
+        }),
+      ),
+  },
+
+  contact: {
+    submit: (input: { name: string; phone: string; email: string; topic: string; message: string }) =>
+      call(() => mutate((db) => ({ ref: submitContactRequest(db, input).ref }))),
+  },
+
+  applications: {
+    submit: (input: Parameters<typeof submitTalentApplication>[1]) =>
+      call(() => mutate((db) => ({ ref: submitTalentApplication(db, input).ref }))),
+  },
+
+  newsletter: {
+    subscribe: (email: string) => call(() => mutate((db) => subscribeNewsletter(db, email))),
+  },
+
   demo: {
     run: (bookingId: string, action: DemoAction, note?: string) =>
       call(() => mutate((db) => runDemoAction(db, bookingId, action, note))),
+    /** Stand-in for a staff reply from the CRM. */
+    replyAsManager: (leadId: string, body: string) =>
+      call(() => mutate((db) => toMessage(postLeadMessage(db, leadId, "staff", ACCOUNT_MANAGER.name, body)))),
+    replyAsTeam: (bookingId: string, body: string) =>
+      call(() => mutate((db) => toMessage(postTalentMessage(db, bookingId, "staff", ACCOUNT_MANAGER.name, body)))),
     reset: () => call(() => resetDb()),
   },
 };
+
+export type Message = { id: string; author: MessageRec["author"]; authorName: string; body: string; at: string };
+
+const toMessage = (m: MessageRec): Message => ({ id: m.id, author: m.author, authorName: m.authorName, body: m.body, at: m.at });
+
+function ownLead(db: MockDb, leadId: string) {
+  const user = currentUser(db);
+  const lead = db.leads.find((l) => l.id === leadId && l.customerId === user.id);
+  if (!lead) throw new ApiError("NOT_FOUND", "We couldn't find that booking");
+  return lead;
+}
+
+function ownTalentBooking(db: MockDb, bookingId: string) {
+  const { user, slug } = currentTalent(db);
+  const booking = db.bookings.find((b) => b.id === bookingId && b.talentSlug === slug);
+  if (!booking) throw new ApiError("NOT_FOUND", "Booking not found");
+  return { user, booking };
+}
 
 export function errorMessage(error: unknown) {
   if (error instanceof ApiError) return error.message;

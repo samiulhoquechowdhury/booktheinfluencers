@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Mail } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { ForTalent } from "@/components/home/for-talent";
 import { PageIntro } from "@/components/ui/feedback";
-import { SUPPORT } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "For artists & managers",
@@ -18,7 +17,6 @@ const STEPS = [
 ];
 
 export default function ForTalentPage() {
-  const subject = encodeURIComponent("Artist application");
   return (
     <>
       <div className="shell py-12 sm:py-16">
@@ -38,10 +36,10 @@ export default function ForTalentPage() {
         </ol>
 
         <div className="mt-10 flex flex-wrap gap-3">
-          <a href={`mailto:${SUPPORT.email}?subject=${subject}`} className="btn btn-gold">
-            <Mail aria-hidden />
-            Apply by email
-          </a>
+          <Link href="/for-talent/apply" className="btn btn-gold">
+            Apply now
+            <ArrowRight aria-hidden />
+          </Link>
           <Link href="/sign-in?as=talent" className="btn btn-outline">
             Already invited? Sign in
             <ArrowRight aria-hidden />

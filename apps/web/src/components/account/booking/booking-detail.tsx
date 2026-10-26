@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, FileText, MessageCircle, Phone, Receipt } from "lucide-react";
+import { ArrowLeft, FileText, MessageCircle, Receipt } from "lucide-react";
 import type { CustomerLead } from "@repo/schemas";
 import { formatDateTime, formatDateWithWeekday } from "@repo/utils";
-import { errorMessage } from "@/lib/api/client";
-import { useBooking } from "@/lib/api/hooks";
+import { api, errorMessage } from "@/lib/api/client";
+import { keys, useBooking, useLeadMessages } from "@/lib/api/hooks";
 import { durationLabel, inr } from "@/lib/format";
-import { SUPPORT } from "@/lib/site";
 import { RequireSession } from "@/components/auth/require-session";
+import { MessageThread } from "@/components/messages/message-thread";
 import { ErrorState, Spinner } from "@/components/ui/feedback";
 import { BookingCard } from "./booking-card";
 
@@ -46,6 +46,7 @@ function Detail({ leadId }: { leadId: string }) {
           ) : (
             lead.bookings.map((booking) => <BookingCard key={booking.id} leadId={lead.id} booking={booking} />)
           )}
+          <Messages lead={lead} />
         </div>
 
         <aside className="space-y-5">
@@ -76,27 +77,38 @@ function Manager({ lead }: { lead: CustomerLead }) {
       </Card>
     );
   }
-  const digits = lead.manager.phone.replace(/\D/g, "");
   return (
     <Card title="Your booking manager">
       <p className="font-display font-semibold text-ink">{lead.manager.name}</p>
-      <p className="text-sm text-muted">{lead.manager.phone}</p>
-      <div className="mt-4 flex gap-2">
-        <a href={`tel:+${digits}`} className="btn btn-outline btn-sm flex-1">
-          <Phone aria-hidden />
-          Call
-        </a>
-        <a
-          href={`https://wa.me/${SUPPORT.whatsapp}?text=${encodeURIComponent(`Hi, about my booking ${lead.ref}`)}`}
-          target="_blank"
-          rel="noreferrer"
-          className="btn btn-outline btn-sm flex-1"
-        >
-          <MessageCircle aria-hidden />
-          WhatsApp
-        </a>
-      </div>
+      <p className="text-sm text-muted">Handles every step of this booking for you.</p>
+      <a href="#messages" className="btn btn-outline btn-sm mt-4 w-full">
+        <MessageCircle aria-hidden />
+        Send a message
+      </a>
     </Card>
+  );
+}
+
+function Messages({ lead }: { lead: CustomerLead }) {
+  const query = useLeadMessages(lead.id);
+  return (
+    <section id="messages" aria-labelledby="messages-heading" className="scroll-mt-28 rounded-card border border-line bg-white p-5 sm:p-6">
+      <h2 id="messages-heading" className="font-serif text-xl font-semibold text-ink">
+        Messages{lead.manager ? ` with ${lead.manager.name}` : ""}
+      </h2>
+      <p className="mt-1 text-sm text-muted">Ask anything about this booking. Replies also show in your notifications.</p>
+      <div className="mt-5">
+        <MessageThread
+          query={query}
+          queryKey={keys.leadMessages(lead.id)}
+          self="customer"
+          send={(body) => api.messages.sendForLead(lead.id, body)}
+          demoReply={{ label: "Demo: reply as your manager", send: (body) => api.demo.replyAsManager(lead.id, body) }}
+          emptyText="No messages yet. Say hello or ask a question about your event."
+          placeholder="Write to your booking manager…"
+        />
+      </div>
+    </section>
   );
 }
 

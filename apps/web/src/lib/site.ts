@@ -12,11 +12,11 @@ export const NAV_LINKS = [
   { href: "/contact", label: "Contact" },
 ] as const;
 
-// TODO: replace "#" with the real profile URLs once the accounts exist.
-export const SOCIAL_LINKS = [
-  { id: "instagram", label: "Instagram", href: "#" },
-  { id: "linkedin", label: "LinkedIn", href: "#" },
-  { id: "youtube", label: "YouTube", href: "#" },
-] as const;
+/** Social handle used for every profile link — confirm the accounts are registered before launch. */
+export const SOCIAL_HANDLE = "booktheinfluencer";
 
-export const SUPPORT = { phone: "+91 90000 12345", whatsapp: "919000012345", email: "hello@example.com" };
+export const SOCIAL_LINKS = [
+  { id: "instagram", label: "Instagram", href: `https://www.instagram.com/${SOCIAL_HANDLE}` },
+  { id: "linkedin", label: "LinkedIn", href: `https://www.linkedin.com/company/${SOCIAL_HANDLE}` },
+  { id: "youtube", label: "YouTube", href: `https://www.youtube.com/@${SOCIAL_HANDLE}` },
+] as const;

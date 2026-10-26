@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { ArrowRight, BadgeCheck, CalendarCheck, Clapperboard, Languages, MapPin, Plane, ShieldCheck } from "lucide-react";
 import { CATEGORIES, TALENTS } from "@/lib/catalogue/data";
 import { getTalent, similarTalents } from "@/lib/catalogue/query";
@@ -10,6 +11,7 @@ import { SITE_URL } from "@/lib/site";
 import { FavouriteButton } from "@/components/talent/favourite-button";
 import { CompareButton, CompareTray } from "@/components/talent/compare-button";
 import { TalentCard } from "@/components/talent/talent-card";
+import { Spinner } from "@/components/ui/feedback";
 
 export function generateStaticParams() {
   return TALENTS.map((talent) => ({ slug: talent.slug }));
@@ -17,7 +19,8 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps<"/talent/[slug]">): Promise<Metadata> {
   const talent = getTalent((await params).slug);
-  if (!talent) return {};
+  // Runs before streaming starts, so unknown slugs get a real 404 status.
+  if (!talent) notFound();
   const description = `${talent.headline} based in ${talent.baseCity}. ${talent.bio.slice(0, 120)}…`;
   return {
     title: `${talent.stageName} — ${talent.headline}`,
@@ -27,7 +30,16 @@ export async function generateMetadata({ params }: PageProps<"/talent/[slug]">):
   };
 }
 
-export default async function TalentProfilePage({ params }: PageProps<"/talent/[slug]">) {
+/** URL data is read inside Suspense so navigation shows the shell instantly. */
+export default function TalentProfilePage({ params }: PageProps<"/talent/[slug]">) {
+  return (
+    <Suspense fallback={<Spinner label="Loading profile" />}>
+      <Profile params={params} />
+    </Suspense>
+  );
+}
+
+async function Profile({ params }: Pick<PageProps<"/talent/[slug]">, "params">) {
   const talent = getTalent((await params).slug);
   if (!talent) notFound();
 

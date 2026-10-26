@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, Heart, LayoutDashboard, LogOut, UserRound } from "lucide-react";
 import { useSession, useSignOut } from "@/lib/api/hooks";
+import { NotificationsBell } from "./notifications-bell";
 
 export function HeaderActions() {
   const { data: session, isPending } = useSession();
@@ -37,6 +38,7 @@ export function HeaderActions() {
 
   return (
     <>
+      {isCustomer && <NotificationsBell />}
       <Link
         href={isTalent && !isCustomer ? "/portal" : "/account"}
         className="btn btn-sm btn-outline hidden sm:inline-flex"

@@ -15,12 +15,22 @@ function storage(): Storage | null {
   }
 }
 
+/** Fills collections added after a browser first stored its data. */
+function upgrade(db: MockDb): MockDb {
+  db.messages ??= [];
+  db.contactRequests ??= [];
+  db.talentApplications ??= [];
+  db.newsletter ??= [];
+  db.notificationsSeenAt ??= {};
+  return db;
+}
+
 export function loadDb(): MockDb {
   if (memory) return memory;
   const raw = storage()?.getItem(DB_KEY);
   if (raw) {
     try {
-      memory = JSON.parse(raw) as MockDb;
+      memory = upgrade(JSON.parse(raw) as MockDb);
       return memory;
     } catch {
       // Corrupt data: fall through and reseed.

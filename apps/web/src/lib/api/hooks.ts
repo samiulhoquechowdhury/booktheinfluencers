@@ -14,7 +14,23 @@ export const keys = {
   talentBookings: ["talent", "bookings"] as const,
   talentBooking: (id: string) => ["talent", "bookings", id] as const,
   blackouts: ["talent", "blackouts"] as const,
+  leadMessages: (leadId: string) => ["messages", "lead", leadId] as const,
+  talentMessages: (bookingId: string) => ["messages", "talent", bookingId] as const,
+  notifications: ["notifications"] as const,
 };
+
+export function useLeadMessages(leadId: string) {
+  return useQuery({ queryKey: keys.leadMessages(leadId), queryFn: () => api.messages.forLead(leadId) });
+}
+
+export function useTalentMessages(bookingId: string) {
+  return useQuery({ queryKey: keys.talentMessages(bookingId), queryFn: () => api.messages.forTalentBooking(bookingId) });
+}
+
+/** Polls gently so manager replies and booking updates show up without a reload. */
+export function useNotifications(enabled: boolean) {
+  return useQuery({ queryKey: keys.notifications, queryFn: api.notifications.list, enabled, refetchInterval: 20_000 });
+}
 
 export function useSession() {
   return useQuery({ queryKey: keys.session, queryFn: api.auth.getSession, staleTime: Infinity });
@@ -55,6 +71,7 @@ export function useBookingMutation<TArgs, TResult>(
     onSuccess: (result) => {
       void client.invalidateQueries({ queryKey: keys.bookings });
       void client.invalidateQueries({ queryKey: ["talent"] });
+      void client.invalidateQueries({ queryKey: keys.notifications });
       const message = typeof messages.success === "function" ? messages.success(result) : messages.success;
       if (message) toast.success(message);
     },

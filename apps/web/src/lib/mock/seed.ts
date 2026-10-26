@@ -14,6 +14,7 @@ import {
   startCheckout,
   submitEnquiry,
   handleGatewayWebhook,
+  postLeadMessage,
 } from "./server";
 import type { MockDb } from "./types";
 import { TALENTS } from "@/lib/catalogue/data";
@@ -98,6 +99,11 @@ export function buildSeed(): MockDb {
     favourites: { [DEMO_CUSTOMER_ID]: ["aanya-kapoor", "dj-rhea"] },
     blackouts: {},
     processedWebhooks: [],
+    messages: [],
+    contactRequests: [],
+    talentApplications: [],
+    newsletter: [],
+    notificationsSeenAt: {},
   };
 
   // 1. Corporate show — fully confirmed, balance still due.
@@ -125,6 +131,11 @@ export function buildSeed(): MockDb {
   runDemoAction(db, kabir!.id, "sendContract");
   signAndPay(db, kabir!.id, false);
   backdate(db, corporate.id, 12);
+  postLeadMessage(db, corporate.id, "customer", "Neha Verma", "Hi Riya, can Kabir keep the set clean? Families will be in the audience.");
+  postLeadMessage(db, corporate.id, "staff", "Riya Sharma", "Absolutely — I've passed that on and his team confirmed a clean 60-minute set.");
+  const [first, second] = db.messages.filter((m) => m.thread.kind === "lead" && m.thread.leadId === corporate.id);
+  first!.at = addDays(now, -6).toISOString();
+  second!.at = addDays(now, -5.8).toISOString();
 
   // 2. Sangeet — one quote ready to accept, one artist still being checked.
   const sangeet = submitEnquiry(

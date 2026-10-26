@@ -156,4 +156,46 @@ export type MockDb = {
   blackouts: Record<string, string[]>;
   /** Webhook idempotency (PAY-3): ids already processed. */
   processedWebhooks: string[];
+  messages: MessageRec[];
+  contactRequests: ContactRequestRec[];
+  talentApplications: TalentApplicationRec[];
+  newsletter: { email: string; at: string }[];
+  /** Per user: when they last opened their notifications. */
+  notificationsSeenAt: Record<string, string>;
+};
+
+/** CUS-3: a thread per lead (customer ↔ manager) or per booking (talent ↔ team). */
+export type MessageRec = {
+  id: string;
+  thread: { kind: "lead"; leadId: string } | { kind: "talent"; bookingId: string };
+  author: "customer" | "talent" | "staff";
+  authorName: string;
+  body: string;
+  at: string;
+};
+
+export type ContactRequestRec = {
+  id: string;
+  ref: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  topic: string;
+  message: string;
+  at: string;
+};
+
+export type TalentApplicationRec = {
+  id: string;
+  ref: string;
+  stageName: string;
+  category: string;
+  city: string;
+  phone: string;
+  email: string;
+  representation: string;
+  links: string;
+  about: string;
+  status: "NEW" | "REVIEWING" | "INVITED" | "DECLINED";
+  at: string;
 };

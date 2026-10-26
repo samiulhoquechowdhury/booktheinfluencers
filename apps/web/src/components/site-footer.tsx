@@ -50,7 +50,9 @@ export function SiteFooter() {
                 <li key={id}>
                   <a
                     href={href}
-                    aria-label={label}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`${label} (opens in a new tab)`}
                     className="grid size-10 place-items-center rounded-full border border-white/20 text-white/80 transition-colors hover:border-warm hover:text-warm"
                   >
                     <Icon className="size-[18px]" aria-hidden />
