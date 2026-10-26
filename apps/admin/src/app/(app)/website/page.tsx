@@ -145,17 +145,19 @@ function IconButton({ label, onClick, icon: Icon, disabled = false, danger = fal
 }
 
 /** A scaled-down copy of the home page hero layout. */
-function HeroPreview({ slide }: { slide: Pick<HeroSlideRecord, "imageUrl" | "eyebrow" | "title" | "accent" | "body" | "ctaLabel" | "imageAlt"> }) {
+function HeroPreview({ slide }: { slide: Pick<HeroSlideRecord, "imageUrl" | "eyebrow" | "title" | "accent" | "body" | "ctaLabel" | "imageAlt" | "textPosition"> }) {
+  const right = slide.textPosition === "right";
   return (
-    <div className="relative isolate overflow-hidden rounded-xl bg-ink text-white" style={{ aspectRatio: "16 / 7" }}>
+    <div className="relative isolate overflow-hidden rounded-xl bg-ink text-white" style={{ aspectRatio: RATIO }}>
       {slide.imageUrl && (
-        <div className="absolute right-0 top-0 -z-10 h-full" style={{ aspectRatio: RATIO }}>
+        <div className="absolute inset-0 -z-10">
           {/* eslint-disable-next-line @next/next/no-img-element -- preview of an uploaded photo */}
-          <img src={slide.imageUrl} alt={slide.imageAlt} className="size-full object-cover" />
-          <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-ink to-transparent to-30%" />
+          <img src={slide.imageUrl} alt={slide.imageAlt} className="size-full object-cover object-center" />
+          <div aria-hidden className="absolute inset-0 bg-ink/45" />
+          <div aria-hidden className={`absolute inset-0 ${right ? "bg-gradient-to-l" : "bg-gradient-to-r"} from-ink/55 via-ink/15 to-transparent`} />
         </div>
       )}
-      <div className="flex h-full max-w-[45%] flex-col justify-center gap-2 p-5 sm:p-8">
+      <div className={`flex h-full max-w-[45%] flex-col justify-center gap-2 p-5 sm:p-8 ${right ? "ml-auto" : ""}`}>
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-warm sm:text-xs">{slide.eyebrow || "Eyebrow"}</p>
         <p className="font-serif text-lg font-semibold leading-tight sm:text-3xl">
           {slide.title || "Headline"}
@@ -193,6 +195,7 @@ function SlideEditor({ slide, onClose }: { slide?: HeroSlideRecord; onClose: () 
     imageAlt: slide?.imageAlt ?? "",
     imageId: slide?.imageId ?? null,
     active: slide?.active ?? true,
+    textPosition: slide?.textPosition ?? "left",
   }));
   const [imageUrl, setImageUrl] = useState(slide?.imageUrl ?? null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -294,6 +297,24 @@ function SlideEditor({ slide, onClose }: { slide?: HeroSlideRecord; onClose: () 
             {errors.ctaHref && <span className="block text-xs text-rose-700">{errors.ctaHref}</span>}
           </label>
         </div>
+
+        <fieldset>
+          <legend className="text-xs font-semibold text-ink-soft">Text sits on the</legend>
+          <div className="mt-1.5 inline-flex rounded-lg bg-cream p-1">
+            {(["left", "right"] as const).map((side) => (
+              <button
+                key={side}
+                type="button"
+                aria-pressed={form.textPosition === side}
+                onClick={() => set("textPosition", side)}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${form.textPosition === side ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink"}`}
+              >
+                {side === "left" ? "Left" : "Right"}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-muted">Pick the emptier side of the photo so faces stay clear. On phones the text always fills the width.</p>
+        </fieldset>
 
         <label className="flex items-center gap-2 text-sm text-ink">
           <input type="checkbox" checked={form.active} onChange={(e) => set("active", e.target.checked)} className="size-4 accent-[var(--color-gold-deep)]" />

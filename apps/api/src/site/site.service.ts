@@ -23,6 +23,7 @@ const toRecord = (s: HeroSlide): HeroSlideRecord => ({
   ctaLabel: s.ctaLabel,
   ctaHref: s.ctaHref,
   imageAlt: s.imageAlt,
+  textPosition: s.textPosition === "right" ? "right" : "left",
   imageId: s.imageId,
   imageUrl: imageUrl(s),
   updatedAt: s.updatedAt.toISOString(),
@@ -54,7 +55,7 @@ export class SiteService {
     const rows = await this.prisma.db.heroSlide.findMany({ where: { active: true }, orderBy: { position: "asc" } });
     return rows.flatMap((s) => {
       const url = imageUrl(s);
-      return url ? [{ id: s.id, eyebrow: s.eyebrow, title: s.title, accent: s.accent, body: s.body, ctaLabel: s.ctaLabel, ctaHref: s.ctaHref, imageAlt: s.imageAlt, imageUrl: url }] : [];
+      return url ? [{ id: s.id, eyebrow: s.eyebrow, title: s.title, accent: s.accent, body: s.body, ctaLabel: s.ctaLabel, ctaHref: s.ctaHref, imageAlt: s.imageAlt, textPosition: s.textPosition === "right" ? ("right" as const) : ("left" as const), imageUrl: url }] : [];
     });
   }
 

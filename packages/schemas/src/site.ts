@@ -19,6 +19,8 @@ export const HeroSlideInputSchema = z.object({
   /** An uploaded image (from POST /admin/media), or null to keep the bundled photo. */
   imageId: z.string().min(1).nullable(),
   active: z.boolean(),
+  /** Which side of the photo the text sits on; pick the emptier side so faces stay clear. */
+  textPosition: z.enum(["left", "right"]).default("left"),
 });
 export type HeroSlideInput = z.output<typeof HeroSlideInputSchema>;
 
@@ -32,7 +34,7 @@ export type HeroSlideRecord = Omit<HeroSlideInput, "imageId"> & {
 };
 
 /** What the website renders. */
-export type PublicHeroSlide = Pick<HeroSlideRecord, "id" | "eyebrow" | "title" | "accent" | "body" | "ctaLabel" | "ctaHref" | "imageAlt"> & { imageUrl: string };
+export type PublicHeroSlide = Pick<HeroSlideRecord, "id" | "eyebrow" | "title" | "accent" | "body" | "ctaLabel" | "ctaHref" | "imageAlt" | "textPosition"> & { imageUrl: string };
 
 export const MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const MAX_MEDIA_BYTES = 4 * 1024 * 1024;

@@ -635,20 +635,22 @@ model Media {
 
 /// Home page hero carousel, edited by super admins.
 model HeroSlide {
-  id        String   @id @default(cuid())
-  position  Int
-  active    Boolean  @default(true)
+  id           String   @id @default(cuid())
+  position     Int
+  active       Boolean  @default(true)
   /// A bundled image path (e.g. /images/hero.jpg) when no upload is set.
-  imagePath String?
-  imageId   String?
-  imageAlt  String
-  eyebrow   String
-  title     String
-  accent    String
-  body      String
-  ctaLabel  String
-  ctaHref   String
-  updatedAt DateTime @updatedAt
+  imagePath    String?
+  imageId      String?
+  imageAlt     String
+  eyebrow      String
+  title        String
+  accent       String
+  body         String
+  ctaLabel     String
+  ctaHref      String
+  /// "left" or "right": the side of the photo the text sits on (pick the emptier side).
+  textPosition String   @default("left")
+  updatedAt    DateTime @updatedAt
 
   image Media? @relation(fields: [imageId], references: [id], onDelete: SetNull)
 

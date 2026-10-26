@@ -52,6 +52,14 @@ function upgrade(db: MockDb): MockDb {
   db.calendarSelfEdit ??= {};
   db.staffAccounts ??= seedStaffAccounts();
   db.heroSlides ??= structuredClone(DEFAULT_HERO_SLIDES);
+  for (const slide of db.heroSlides) slide.textPosition ??= "left";
+  if ((db.heroDefaultsVersion ?? 1) < 2) {
+    // v2 added the client's two photos after the original slide.
+    const top = Math.max(-1, ...db.heroSlides.map((s) => s.position));
+    for (const [i, slide] of DEFAULT_HERO_SLIDES.slice(1).entries())
+      if (!db.heroSlides.some((s) => s.id === slide.id)) db.heroSlides.push({ ...structuredClone(slide), position: top + 1 + i });
+    db.heroDefaultsVersion = 2;
+  }
   db.media ??= {};
   return db;
 }

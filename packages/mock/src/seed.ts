@@ -104,6 +104,7 @@ export function buildSeed(): MockDb {
     calendarSelfEdit: {},
     staffAccounts: seedStaffAccounts(),
     heroSlides: structuredClone(DEFAULT_HERO_SLIDES),
+    heroDefaultsVersion: 2,
     media: {},
     processedWebhooks: [],
     messages: [],

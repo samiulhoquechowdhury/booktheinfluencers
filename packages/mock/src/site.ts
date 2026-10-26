@@ -6,7 +6,7 @@ import type { HeroSlideRec, MockDb } from "./types";
 
 // Website content for the in-browser mock. Mirrors apps/api/src/site: same schema, same rules.
 
-/** The hero before it was editable; also what the API migration seeds. */
+/** The built-in slides; the API migrations seed the same three. */
 export const DEFAULT_HERO_SLIDES: HeroSlideRec[] = [
   {
     id: "hero_default",
@@ -21,6 +21,39 @@ export const DEFAULT_HERO_SLIDES: HeroSlideRec[] = [
     body: "Singers, DJs, comedians, anchors and creators for weddings, corporate nights and campus fests. We confirm availability with their representatives, then take care of the quote, contract and payments.",
     ctaLabel: "Explore talent",
     ctaHref: "#talent",
+    textPosition: "left",
+    updatedAt: "2026-10-27T00:00:00.000Z",
+  },
+  {
+    id: "hero_creators",
+    position: 1,
+    active: true,
+    imagePath: "/images/hero-2.jpg",
+    imageId: null,
+    imageAlt: "A group of creators with a camera, a guitar and a microphone beside social media icons, and a woman's profile lit in red",
+    eyebrow: "Creators & influencers",
+    title: "Creators who move",
+    accent: "your audience.",
+    body: "Instagram, YouTube and short-video creators for launches, campaigns and live appearances, booked through their own managers with a written contract.",
+    ctaLabel: "Browse creators",
+    ctaHref: "/categories/creators",
+    textPosition: "right",
+    updatedAt: "2026-10-27T00:00:00.000Z",
+  },
+  {
+    id: "hero_stars",
+    position: 2,
+    active: true,
+    imagePath: "/images/hero-3.jpg",
+    imageId: null,
+    imageAlt: "Film and music stars on a blue-lit set beside creators filming selfies on a sunset-coloured backdrop",
+    eyebrow: "Stars & creators · one brief",
+    title: "From the big screen",
+    accent: "to every feed.",
+    body: "Actors, playback singers and the creators your audience follows. One brief, one contract, one payment schedule, and we handle every detail until the day.",
+    ctaLabel: "Plan your event",
+    ctaHref: "/enquiry",
+    textPosition: "left",
     updatedAt: "2026-10-27T00:00:00.000Z",
   },
 ];
@@ -51,7 +84,7 @@ export function publicHero(db: HeroStore): PublicHeroSlide[] {
   return sorted(db).flatMap((s) => {
     const url = imageUrl(db, s);
     if (!s.active || !url) return [];
-    return [{ id: s.id, eyebrow: s.eyebrow, title: s.title, accent: s.accent, body: s.body, ctaLabel: s.ctaLabel, ctaHref: s.ctaHref, imageAlt: s.imageAlt, imageUrl: url }];
+    return [{ id: s.id, eyebrow: s.eyebrow, title: s.title, accent: s.accent, body: s.body, ctaLabel: s.ctaLabel, ctaHref: s.ctaHref, imageAlt: s.imageAlt, textPosition: s.textPosition, imageUrl: url }];
   });
 }
 

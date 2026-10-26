@@ -177,6 +177,8 @@ export type MockDb = {
   /** Home page hero carousel and the images uploaded for it (data URLs in demo mode). */
   heroSlides: HeroSlideRec[];
   media: Record<string, string>;
+  /** Built-in hero slides already added to this browser's store (so deleted ones don't come back). */
+  heroDefaultsVersion?: number;
 };
 
 export type StaffAccountRec = {
