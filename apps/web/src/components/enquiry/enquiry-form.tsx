@@ -126,7 +126,21 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
           ))}
         </ol>
 
-        <form noValidate onSubmit={(e) => e.preventDefault()} className="rounded-card border border-line bg-white p-6 sm:p-8">
+        {/*
+          Not a <form>: the phone sign-in at the end (OtpForm) is its own form, and a form inside a form makes
+          browsers submit the outer one natively, reloading the page and wiping the brief. Enter still moves on.
+        */}
+        <div
+          role="group"
+          aria-label="Event brief"
+          onKeyDown={(e) => {
+            if (verifying || e.key !== "Enter" || !(e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement)) return;
+            e.preventDefault();
+            if (step < STEPS.length - 1) void next();
+            else void onFinalSubmit();
+          }}
+          className="rounded-card border border-line bg-white p-6 sm:p-8"
+        >
           {step === 0 && (
             <fieldset className="grid gap-5 sm:grid-cols-2">
               <legend className="mb-5 font-serif text-2xl font-semibold text-ink">Tell us about your event</legend>
@@ -324,7 +338,7 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
               {errorMessage(submit.error)}
             </p>
           )}
-        </form>
+        </div>
       </div>
 
       <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
