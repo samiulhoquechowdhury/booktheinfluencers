@@ -5,7 +5,7 @@ const DEV_SECRET = "dev-only-secret-change-me-0123456789abcdef";
 const EnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-    PORT: z.coerce.number().int().positive().default(4000),
+    PORT: z.coerce.number().int().positive().default(4100), // 4000 clashes with another local project
     DATABASE_URL: z.string().url(),
     /** Signs 15-minute access tokens and the staff MFA challenge. */
     JWT_SECRET: z.string().min(32).default(DEV_SECRET),

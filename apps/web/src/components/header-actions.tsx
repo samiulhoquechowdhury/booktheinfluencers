@@ -48,7 +48,7 @@ export function HeaderActions() {
       <details className="relative">
         <summary
           aria-label="Account menu"
-          className="grid size-[42px] cursor-pointer list-none place-items-center rounded-full bg-ink font-display text-sm font-semibold text-warm [&::-webkit-details-marker]:hidden"
+          className="grid size-10 cursor-pointer list-none place-items-center rounded-full bg-ink sm:size-[42px] font-display text-sm font-semibold text-warm [&::-webkit-details-marker]:hidden"
         >
           {initials || <UserRound className="size-5" aria-hidden />}
         </summary>

@@ -7,7 +7,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 print:hidden h-[84px] border-b border-ink/8 bg-white/95 backdrop-blur-lg">
       <div className="shell flex h-full items-center justify-between gap-6">
-        <Link href="/" className="font-serif text-2xl font-semibold tracking-tight text-ink">
+        <Link href="/" className="shrink-0 font-serif text-xl font-semibold tracking-tight text-ink sm:text-2xl">
           {BRAND_NAME}
         </Link>
 
@@ -23,11 +23,12 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        {/* Tighter on phones so logo + bell + avatar + menu fit in 360 px; search lives in the menu and hero there. */}
+        <div className="flex items-center gap-1 sm:gap-3">
           <Link
             href="/talent"
             aria-label="Search talent"
-            className="grid size-10 place-items-center rounded-md text-ink transition-colors hover:bg-cream"
+            className="hidden size-10 place-items-center rounded-md text-ink transition-colors hover:bg-cream sm:grid"
           >
             <Search className="size-[22px]" strokeWidth={1.75} aria-hidden />
           </Link>

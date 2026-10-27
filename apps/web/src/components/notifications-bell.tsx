@@ -35,6 +35,7 @@ export function NotificationsBell() {
   const unread = data?.unread ?? 0;
 
   return (
+    // On phones the panel is full width under the header: anchored to the bell it would run off the left edge.
     <div ref={ref} className="relative">
       <button
         type="button"
@@ -56,7 +57,7 @@ export function NotificationsBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-card border border-line bg-white shadow-card">
+        <div className="fixed inset-x-4 top-[4.5rem] z-50 overflow-hidden rounded-card border border-line bg-white shadow-card sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[22rem]">
           <p className="border-b border-line px-4 py-3 font-display text-sm font-semibold text-ink">Notifications</p>
           {!data || data.items.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-muted">Nothing yet. Updates on your bookings will show here.</p>
