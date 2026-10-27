@@ -11,6 +11,8 @@ export async function createApp() {
   // rawBody: webhook signatures are computed over the exact bytes received.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true, logger: env.NODE_ENV === "test" ? false : undefined });
   app.setGlobalPrefix("v1");
+  // The website proxies /v1 from the same machine: trust its X-Forwarded-For so sign-in history shows the visitor's IP.
+  app.set("trust proxy", "loopback");
   // Image uploads (POST /v1/admin/media) arrive as raw bytes; everything else stays JSON.
   app.useBodyParser("raw", { type: ["image/jpeg", "image/png", "image/webp"], limit: "5mb" });
   app.use(helmet());

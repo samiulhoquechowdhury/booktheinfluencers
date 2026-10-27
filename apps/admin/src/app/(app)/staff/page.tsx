@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Crown, KeyRound, LoaderCircle, MoreHorizontal, Pencil, Plus, Power, Smartphone } from "lucide-react";
+import { Copy, Crown, History, KeyRound, LoaderCircle, MoreHorizontal, Pencil, Plus, Power, Smartphone } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -136,6 +137,12 @@ function Row({ account: s, self, onEdit, onPassword, onTransfer }: { account: St
           <>
             <div aria-hidden className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
             <ul role="menu" className="absolute right-4 top-12 z-20 w-60 rounded-lg border border-line bg-white py-1 text-left text-sm shadow-lg">
+              <li role="none">
+                <Link role="menuitem" href={`/audit?tab=sign-ins&q=${encodeURIComponent(s.email)}`} className="flex w-full items-center gap-2.5 px-3 py-2 text-ink hover:bg-cream">
+                  <History className="size-4" aria-hidden />
+                  Sign-in history
+                </Link>
+              </li>
               <MenuItem
                 icon={KeyRound}
                 label="Reset password"

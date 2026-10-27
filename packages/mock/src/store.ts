@@ -61,6 +61,7 @@ function upgrade(db: MockDb): MockDb {
     db.heroDefaultsVersion = 2;
   }
   db.media ??= {};
+  db.loginEvents ??= [];
   return db;
 }
 

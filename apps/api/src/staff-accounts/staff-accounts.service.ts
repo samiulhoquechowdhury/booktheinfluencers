@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { hashPassword, verifyPassword, type Prisma, type Role, type User } from "@repo/db";
-import type { StaffAccount, StaffCreateInput, StaffUpdateInput, SuperAdminTransferInput, TemporaryPassword } from "@repo/schemas";
+import type { LoginEventRecord, SignInsPage, StaffAccount, StaffCreateInput, StaffUpdateInput, SuperAdminTransferInput, TemporaryPassword } from "@repo/schemas";
 import { DomainError, forbidden, notFound } from "../common/errors";
 import { STAFF_ROLES, type AuthUser } from "../auth/guard";
 import { newTemporaryPassword } from "../auth/crypto";
@@ -151,5 +151,45 @@ export class StaffAccountsService {
       await this.audit(tx, user, "staff.resetMfa", target, "Authenticator reset");
       return toAccount(updated);
     });
+  }
+
+  /** Sign-in history, newest first, 100 at a time. */
+  async signIns(user: AuthUser, f: { audience?: string; event?: string; q?: string; userId?: string; before?: string }): Promise<SignInsPage> {
+    this.requireAdmin(user);
+    const PAGE = 100;
+    const q = f.q?.trim();
+    const where: Prisma.LoginEventWhereInput = {
+      ...(f.audience && { audience: f.audience }),
+      ...(f.event && { event: f.event }),
+      ...(f.userId && { userId: f.userId }),
+      ...(q && { OR: [{ identifier: { contains: q, mode: "insensitive" } }, { userName: { contains: q, mode: "insensitive" } }, { ip: { contains: q } }] }),
+      ...(f.before && { createdAt: { lt: new Date(f.before) } }),
+    };
+    const since = new Date(Date.now() - 24 * 60 * 60_000);
+    const [rows, signIns, failed, people] = await Promise.all([
+      this.prisma.db.loginEvent.findMany({ where, orderBy: { createdAt: "desc" }, take: PAGE + 1 }),
+      this.prisma.db.loginEvent.count({ where: { event: "sign_in", createdAt: { gte: since } } }),
+      this.prisma.db.loginEvent.count({ where: { event: "sign_in_failed", createdAt: { gte: since } } }),
+      this.prisma.db.loginEvent.groupBy({ by: ["userId"], where: { event: "sign_in", createdAt: { gte: since }, userId: { not: null } } }),
+    ]);
+    const page = rows.slice(0, PAGE);
+    return {
+      events: page.map(
+        (e): LoginEventRecord => ({
+          id: e.id,
+          at: e.createdAt.toISOString(),
+          userId: e.userId,
+          userName: e.userName,
+          identifier: e.identifier,
+          audience: e.audience as LoginEventRecord["audience"],
+          event: e.event as LoginEventRecord["event"],
+          detail: e.detail,
+          ip: e.ip,
+          userAgent: e.userAgent,
+        }),
+      ),
+      nextBefore: rows.length > PAGE ? page.at(-1)!.createdAt.toISOString() : null,
+      last24h: { signIns, failed, people: people.length },
+    };
   }
 }

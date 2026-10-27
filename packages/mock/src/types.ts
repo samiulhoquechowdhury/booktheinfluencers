@@ -6,6 +6,7 @@ import type {
   PayoutStatus,
   QuoteStatus,
   HeroSlideRecord,
+  LoginEventRecord,
   StaffRoleName,
   TalentAdminDetail,
 } from "@repo/schemas";
@@ -177,6 +178,8 @@ export type MockDb = {
   /** Home page hero carousel and the images uploaded for it (data URLs in demo mode). */
   heroSlides: HeroSlideRec[];
   media: Record<string, string>;
+  /** Sign-in history, newest first (CRM → Audit log → Sign-ins). */
+  loginEvents: LoginEventRecord[];
   /** Built-in hero slides already added to this browser's store (so deleted ones don't come back). */
   heroDefaultsVersion?: number;
 };

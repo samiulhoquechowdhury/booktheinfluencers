@@ -26,6 +26,7 @@ import {
   type DemoAction,
 } from "@repo/mock/server";
 import { toCustomerLead, toTalentBooking } from "@repo/mock/serializers";
+import { recordLogin } from "@repo/mock/login-events";
 import { loadDb, mutate, readSessionUserId, resetDb, writeSessionUserId } from "@repo/mock/store";
 import type { MessageRec, MockDb, UserRec } from "@repo/mock/types";
 import { getTalent, getTalentSummaries, searchTalents } from "@repo/mock/catalogue/query";
@@ -79,34 +80,55 @@ export const mockApi = {
 
     /** AUTH-1/AUTH-4: phone OTP; a new customer account is created on first verify. AUTH-3: talent accounts are invite-only. */
     verifyOtp: (input: { phone: string; code: string; name?: string; as: "customer" | "talent" }) =>
+      call(() => {
+        try {
+          return mutate((db) => {
+            if (input.code !== DEMO_OTP) throw new ApiError("OTP_INVALID", "That code is not right. Try again.");
+            let user = db.users.find((u) => u.phone === input.phone);
+            let created = false;
+            if (input.as === "talent") {
+              if (!user?.roles.includes("TALENT") && !TALENT_LOGINS[input.phone]) {
+                throw new ApiError("NOT_INVITED", "This number has no talent account. Talent accounts are created by invite.");
+              }
+            } else if (!user) {
+              user = {
+                id: newId("usr"),
+                phone: input.phone,
+                name: input.name?.trim() || "Guest",
+                email: null,
+                roles: ["CUSTOMER"],
+                talentSlug: null,
+                createdAt: new Date().toISOString(),
+              };
+              db.users.push(user);
+              created = true;
+            } else if (!user.roles.includes("CUSTOMER")) {
+              user.roles.push("CUSTOMER");
+            }
+            writeSessionUserId(user!.id);
+            recordLogin(db, { audience: input.as, event: "sign_in", identifier: input.phone, userId: user?.id ?? null, userName: user?.name ?? null, detail: created ? "New account" : null });
+            return toSession(user!);
+          });
+        } catch (error) {
+          // The failed change was thrown away, so the attempt is saved on its own.
+          if (error instanceof ApiError) {
+            mutate((db) => {
+              const known = db.users.find((u) => u.phone === input.phone);
+              recordLogin(db, { audience: input.as, event: "sign_in_failed", identifier: input.phone, userId: known?.id ?? null, userName: known?.name ?? null, detail: error.code === "NOT_INVITED" ? "No artist account for this number" : "Wrong or expired code" });
+            });
+          }
+          throw error;
+        }
+      }),
+
+    signOut: () =>
       call(() =>
         mutate((db) => {
-          if (input.code !== DEMO_OTP) throw new ApiError("OTP_INVALID", "That code is not right. Try again.");
-          let user = db.users.find((u) => u.phone === input.phone);
-          if (input.as === "talent") {
-            if (!user?.roles.includes("TALENT") && !TALENT_LOGINS[input.phone]) {
-              throw new ApiError("NOT_INVITED", "This number has no talent account. Talent accounts are created by invite.");
-            }
-          } else if (!user) {
-            user = {
-              id: newId("usr"),
-              phone: input.phone,
-              name: input.name?.trim() || "Guest",
-              email: null,
-              roles: ["CUSTOMER"],
-              talentSlug: null,
-              createdAt: new Date().toISOString(),
-            };
-            db.users.push(user);
-          } else if (!user.roles.includes("CUSTOMER")) {
-            user.roles.push("CUSTOMER");
-          }
-          writeSessionUserId(user!.id);
-          return toSession(user!);
+          const user = db.users.find((u) => u.id === readSessionUserId());
+          if (user) recordLogin(db, { audience: user.roles.includes("CUSTOMER") ? "customer" : "talent", event: "sign_out", identifier: user.phone, userId: user.id, userName: user.name, detail: null });
+          writeSessionUserId(null);
         }),
       ),
-
-    signOut: () => call(() => writeSessionUserId(null)),
 
     updateProfile: (input: { name: string; email: string }) =>
       call(() =>

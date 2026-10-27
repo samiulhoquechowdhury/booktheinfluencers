@@ -2,7 +2,7 @@
 
 import { ApiError } from "@repo/mock/server";
 import { STAFF_ROLES, type StaffRole } from "@repo/mock/internal";
-import type { HeroSlideRecord, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
+import type { HeroSlideRecord, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
 import type { mockApi, LeadDetail, LeadRow, StaffSession } from "./mock-api";
 
 // HTTP transport for the staff API (/v1/admin). Same interface as mock-api.ts, so the screens
@@ -264,6 +264,10 @@ export const httpApi: typeof mockApi = {
     resetPassword: (staffId) => post<TemporaryPassword>(`/admin/staff/${id(staffId)}/reset-password`),
     resetMfa: (staffId) => post<StaffAccount>(`/admin/staff/${id(staffId)}/reset-mfa`),
     transfer: (staffId, input) => post<StaffAccount>(`/admin/staff/${id(staffId)}/make-super-admin`, input),
+    signIns: (filters = {}) => {
+      const query = new URLSearchParams(Object.entries(filters).filter((e): e is [string, string] => Boolean(e[1])));
+      return request<SignInsPage>(`/admin/sign-ins${query.size ? `?${query}` : ""}`);
+    },
   },
 
   site: {

@@ -5,6 +5,7 @@ import { env } from "../config/env";
 import { DomainError, unauthenticated } from "../common/errors";
 import { PrismaService } from "../prisma/prisma.service";
 import { STAFF_ROLES } from "./guard";
+import { FAILURE_DETAIL, recordLogin, type RequestMeta } from "./login-events";
 import {
   hmac,
   newOtp,
@@ -53,7 +54,22 @@ export class AuthService {
   }
 
   /** AUTH-1/AUTH-4: customers are created on first verify. AUTH-3: talent accounts exist only by invite. */
-  async verifyOtp(input: { phone: string; code: string; name?: string; as: "customer" | "talent" }): Promise<IssuedSession> {
+  async verifyOtp(input: { phone: string; code: string; name?: string; as: "customer" | "talent" }, meta: RequestMeta): Promise<IssuedSession> {
+    try {
+      const { session, created } = await this.verifyOtpInner(input);
+      await recordLogin(this.prisma.db, meta, { audience: input.as, event: "sign_in", identifier: input.phone, userId: session.user.id, userName: session.user.name, detail: created ? "New account" : null });
+      return session;
+    } catch (error) {
+      if (error instanceof DomainError) {
+        const known = await this.prisma.db.user.findUnique({ where: { phone: input.phone }, select: { id: true, name: true } });
+        await recordLogin(this.prisma.db, meta, { audience: input.as, event: "sign_in_failed", identifier: input.phone, userId: known?.id, userName: known?.name, detail: FAILURE_DETAIL[error.code] ?? error.message });
+      }
+      throw error;
+    }
+  }
+
+  private async verifyOtpInner(input: { phone: string; code: string; name?: string; as: "customer" | "talent" }) {
+    let created = false;
     const otp = await this.prisma.db.otpCode.findFirst({
       where: { phone: input.phone, usedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: "desc" },
@@ -72,37 +88,58 @@ export class AuthService {
       }
     } else if (!user) {
       user = await this.prisma.db.user.create({ data: { phone: input.phone, name: input.name?.trim() || "Guest", roles: ["CUSTOMER"] } });
+      created = true;
     } else if (!user.roles.includes("CUSTOMER")) {
       user = await this.prisma.db.user.update({ where: { id: user.id }, data: { roles: { push: "CUSTOMER" } } });
     }
-    return this.issue(user, false);
+    return { session: await this.issue(user, false), created };
   }
 
   /**
    * AUTH-2 step 1. Same error for unknown email and wrong password. Staff without an authenticator
    * get a fresh secret to add to their app; it's saved only once a code from it is verified.
    */
-  async staffPassword(email: string, password: string) {
+  async staffPassword(email: string, password: string, meta: RequestMeta) {
     const user = await this.prisma.db.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     const ok = user?.passwordHash && user.roles.some((r) => STAFF_ROLES.includes(r)) && (await verifyPassword(password, user.passwordHash));
-    if (!user || !ok) throw new DomainError("INVALID_LOGIN", "Email or password is incorrect", 401);
-    if (user.disabledAt) throw new DomainError("ACCOUNT_DISABLED", "This account has been deactivated. Ask a super admin to restore it.", 403);
+    const fail = async (code: string) =>
+      recordLogin(this.prisma.db, meta, { audience: "staff", event: "sign_in_failed", identifier: email.trim().toLowerCase(), userId: user?.id, userName: user?.name, detail: FAILURE_DETAIL[code] });
+    if (!user || !ok) {
+      await fail("INVALID_LOGIN");
+      throw new DomainError("INVALID_LOGIN", "Email or password is incorrect", 401);
+    }
+    if (user.disabledAt) {
+      await fail("ACCOUNT_DISABLED");
+      throw new DomainError("ACCOUNT_DISABLED", "This account has been deactivated. Ask a super admin to restore it.", 403);
+    }
     if (user.mfaSecret) return { mfaToken: await signMfaChallenge(user.id) };
     const secret = newTotpSecret();
     return { mfaToken: await signMfaChallenge(user.id, secret), setup: { secret, uri: otpauthUrl(secret, user.email!) } };
   }
 
   /** AUTH-2 step 2: TOTP. MFA_DEMO_CODE only exists outside production (env.ts refuses it there). */
-  async staffMfa(mfaToken: string, code: string): Promise<IssuedSession> {
-    const { userId, enrol } = await verifyMfaChallenge(mfaToken).catch(() => {
+  async staffMfa(mfaToken: string, code: string, meta: RequestMeta): Promise<IssuedSession> {
+    const challenge = await verifyMfaChallenge(mfaToken).catch(() => null);
+    if (!challenge) {
+      await recordLogin(this.prisma.db, meta, { audience: "staff", event: "sign_in_failed", identifier: "unknown", detail: FAILURE_DETAIL.MFA_EXPIRED });
       throw new DomainError("MFA_EXPIRED", "Sign-in timed out. Start again.", 401);
-    });
+    }
+    const { userId, enrol } = challenge;
     const user = await this.prisma.db.user.findUniqueOrThrow({ where: { id: userId } });
-    if (user.disabledAt) throw new DomainError("ACCOUNT_DISABLED", "This account has been deactivated. Ask a super admin to restore it.", 403);
+    const who = { audience: "staff" as const, identifier: user.email ?? user.id, userId: user.id, userName: user.name };
+    if (user.disabledAt) {
+      await recordLogin(this.prisma.db, meta, { ...who, event: "sign_in_failed", detail: FAILURE_DETAIL.ACCOUNT_DISABLED });
+      throw new DomainError("ACCOUNT_DISABLED", "This account has been deactivated. Ask a super admin to restore it.", 403);
+    }
     const secret = user.mfaSecret ?? enrol;
     const enrolled = Boolean(secret && verifyTotp(secret, code));
     const ok = enrolled || (env.MFA_DEMO_CODE !== undefined && safeEqual(code, env.MFA_DEMO_CODE));
-    if (!ok) throw new DomainError("OTP_INVALID", "That code is not right", 401);
+    if (!ok) {
+      await recordLogin(this.prisma.db, meta, { ...who, event: "sign_in_failed", detail: "Wrong authenticator code" });
+      throw new DomainError("OTP_INVALID", "That code is not right", 401);
+    }
+    const setUp = !user.mfaSecret && Boolean(enrol) && enrolled;
+    await recordLogin(this.prisma.db, meta, { ...who, event: "sign_in", detail: setUp ? "Authenticator set up" : user.mustChangePassword ? "Temporary password" : null });
     await this.prisma.db.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date(), ...(!user.mfaSecret && enrol && enrolled && { mfaSecret: enrol }) },
@@ -111,11 +148,12 @@ export class AuthService {
   }
 
   /** Staff choose their own password (required after a temporary one). Other sessions are signed out. */
-  async changeStaffPassword(userId: string, current: string, next: string) {
+  async changeStaffPassword(userId: string, current: string, next: string, meta: RequestMeta) {
     const user = await this.prisma.db.user.findUnique({ where: { id: userId } });
     if (!user?.passwordHash || !(await verifyPassword(current, user.passwordHash))) throw new DomainError("INVALID_PASSWORD", "Your current password is not right", 400);
     if (current === next) throw new DomainError("VALIDATION", "Choose a password you haven't used here");
     await this.prisma.db.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(next), mustChangePassword: false } });
+    await recordLogin(this.prisma.db, meta, { audience: "staff", event: "password_changed", identifier: user.email ?? user.id, userId, userName: user.name, detail: user.mustChangePassword ? "Replaced temporary password" : null });
   }
 
   /** AUTH-5: rotating refresh tokens; reuse of a rotated token revokes every session. */
@@ -133,9 +171,13 @@ export class AuthService {
     return this.issue(session.user, mfa);
   }
 
-  async logout(refreshToken: string | undefined) {
+  async logout(refreshToken: string | undefined, meta: RequestMeta, audience: "staff" | "customer") {
     if (!refreshToken) return;
+    const session = await this.prisma.db.session.findUnique({ where: { refreshTokenHash: hmac(refreshToken) }, include: { user: true } });
     await this.prisma.db.session.updateMany({ where: { refreshTokenHash: hmac(refreshToken) }, data: { revokedAt: new Date() } });
+    if (!session || session.revokedAt) return;
+    const kind = audience === "staff" ? "staff" : session.user.roles.includes("TALENT") && !session.user.roles.includes("CUSTOMER") ? "talent" : "customer";
+    await recordLogin(this.prisma.db, meta, { audience: kind, event: "sign_out", identifier: (audience === "staff" ? session.user.email : session.user.phone) ?? session.user.id, userId: session.user.id, userName: session.user.name });
   }
 
   async me(userId: string): Promise<SessionUser> {

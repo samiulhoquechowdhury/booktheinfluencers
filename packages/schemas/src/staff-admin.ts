@@ -53,3 +53,29 @@ export type StaffAccount = {
 
 /** Returned once when an account is created or its password reset. Never stored in plain text. */
 export type TemporaryPassword = { temporaryPassword: string };
+
+// ---------- Sign-in history (CRM → Audit log → Sign-ins) ----------
+
+export type LoginAudience = "staff" | "customer" | "talent";
+export type LoginEventKind = "sign_in" | "sign_in_failed" | "sign_out" | "password_changed";
+
+export type LoginEventRecord = {
+  id: string;
+  at: string;
+  userId: string | null;
+  userName: string | null;
+  /** Email for staff, phone for customers and artists. */
+  identifier: string;
+  audience: LoginAudience;
+  event: LoginEventKind;
+  detail: string | null;
+  ip: string | null;
+  userAgent: string | null;
+};
+
+export type SignInsPage = {
+  events: LoginEventRecord[];
+  /** Pass as `before` for the next (older) page; null when there are no more. */
+  nextBefore: string | null;
+  last24h: { signIns: number; failed: number; people: number };
+};

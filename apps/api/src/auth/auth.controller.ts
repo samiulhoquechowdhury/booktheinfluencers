@@ -5,6 +5,7 @@ import { ChangePasswordSchema, INDIAN_MOBILE } from "@repo/schemas";
 import { env } from "../config/env";
 import { parse } from "../common/validate";
 import { AuthService, type IssuedSession } from "./auth.service";
+import { requestMeta } from "./login-events";
 import { CurrentUser, Public, type AuthUser } from "./guard";
 
 /** Separate cookies so a customer and a staff session can live in one browser (admin shares the site's origin). */
@@ -35,32 +36,32 @@ export class AuthController {
   @Public()
   @Post("otp/verify")
   @HttpCode(200)
-  async verifyOtp(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
-    return this.respond(res, await this.auth.verifyOtp(parse(Verify, body)), "customer");
+  async verifyOtp(@Req() req: Request, @Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+    return this.respond(res, await this.auth.verifyOtp(parse(Verify, body), requestMeta(req)), "customer");
   }
 
   @Public()
   @Post("staff/login")
   @HttpCode(200)
-  staffLogin(@Body() body: unknown) {
+  staffLogin(@Req() req: Request, @Body() body: unknown) {
     const { email, password } = parse(StaffLogin, body);
-    return this.auth.staffPassword(email, password);
+    return this.auth.staffPassword(email, password, requestMeta(req));
   }
 
   @Public()
   @Post("staff/mfa")
   @HttpCode(200)
-  async staffMfa(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+  async staffMfa(@Req() req: Request, @Body() body: unknown, @Res({ passthrough: true }) res: Response) {
     const { mfaToken, code } = parse(StaffMfa, body);
-    return this.respond(res, await this.auth.staffMfa(mfaToken, code), "staff");
+    return this.respond(res, await this.auth.staffMfa(mfaToken, code, requestMeta(req)), "staff");
   }
 
   /** Any signed-in staff member; required after a temporary password. */
   @Post("staff/password")
   @HttpCode(204)
-  changePassword(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+  changePassword(@Req() req: Request, @CurrentUser() user: AuthUser, @Body() body: unknown) {
     const { current, next } = parse(ChangePasswordSchema, body);
-    return this.auth.changeStaffPassword(user.id, current, next);
+    return this.auth.changeStaffPassword(user.id, current, next, requestMeta(req));
   }
 
   @Public()
@@ -81,7 +82,7 @@ export class AuthController {
   @Post("logout")
   @HttpCode(204)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.auth.logout(req.cookies?.[COOKIES.customer]);
+    await this.auth.logout(req.cookies?.[COOKIES.customer], requestMeta(req), "customer");
     res.clearCookie(COOKIES.customer, { path: "/v1/auth" });
   }
 
@@ -89,7 +90,7 @@ export class AuthController {
   @Post("staff/logout")
   @HttpCode(204)
   async staffLogout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.auth.logout(req.cookies?.[COOKIES.staff]);
+    await this.auth.logout(req.cookies?.[COOKIES.staff], requestMeta(req), "staff");
     res.clearCookie(COOKIES.staff, { path: "/v1/auth" });
   }
 

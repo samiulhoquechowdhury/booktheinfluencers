@@ -12,7 +12,7 @@ import { mockApi } from "./mock-api";
 
 export { ApiError, can, seesFinance };
 export { quoteChecks } from "./checks";
-export type { LeadBooking, LeadDetail, LeadRow, PasswordStep, StaffSession } from "./mock-api";
+export type { LeadBooking, LeadDetail, LeadRow, PasswordStep, SignInFilters, StaffSession } from "./mock-api";
 export type { DemoAction, QuoteDraft, QuoteDraftLine, QuoteRate, StaffUser };
 
 export const USING_API = Boolean(process.env.NEXT_PUBLIC_API_BASE);

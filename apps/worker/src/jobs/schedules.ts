@@ -70,3 +70,11 @@ export async function sendEventReminders(db: PrismaClient, now = new Date()) {
   }
   return { reminded: queued };
 }
+
+/** Sign-in history is kept for 180 days (CRM → Audit log → Sign-ins), then deleted. */
+export const LOGIN_HISTORY_DAYS = 180;
+export async function pruneLoginEvents(db: PrismaClient, now = new Date()) {
+  const cutoff = new Date(now.getTime() - LOGIN_HISTORY_DAYS * 24 * 60 * 60_000);
+  const { count } = await db.loginEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  return { deleted: count };
+}

@@ -344,3 +344,35 @@ describe("website hero", () => {
     await http().delete(`/v1/admin/site/hero/${id}`).set(as("admin")).expect(409);
   });
 });
+
+describe("sign-in history", () => {
+  it("records staff and customer sign-ins, failures and sign-outs for the super admin", async () => {
+    const ua = { "user-agent": "Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0" };
+    await http().post("/v1/auth/staff/login").set(ua).send({ email: "sales@demo.in", password: "wrong-one" }).expect(401);
+    const step1 = await http().post("/v1/auth/staff/login").set(ua).send({ email: "sales@demo.in", password: "demo1234" }).expect(200);
+    await http().post("/v1/auth/staff/mfa").set(ua).send({ mfaToken: step1.body.mfaToken, code: "000000" }).expect(401);
+    const login = await http().post("/v1/auth/staff/mfa").set(ua).send({ mfaToken: step1.body.mfaToken, code: "123456" }).expect(200);
+    const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
+    await http().post("/v1/auth/staff/logout").set("cookie", cookie).set(ua).expect(204);
+
+    const phone = `97${String(Date.now()).slice(-8)}`;
+    await http().post("/v1/auth/otp/send").send({ phone }).expect(200);
+    await http().post("/v1/auth/otp/verify").send({ phone, code: "999999", as: "customer" }).expect(400);
+    await http().post("/v1/auth/otp/verify").send({ phone, code: "123456", name: "History Customer", as: "customer" }).expect(200);
+
+    await http().get("/v1/admin/sign-ins").set(as("sales")).expect(403);
+    const staff = await http().get("/v1/admin/sign-ins").query({ audience: "staff", q: "sales@demo.in" }).set(as("admin")).expect(200);
+    const kinds = staff.body.events.slice(0, 4).map((e: { event: string; detail: string | null }) => `${e.event}:${e.detail ?? ""}`);
+    expect(kinds).toEqual(["sign_out:", "sign_in:", "sign_in_failed:Wrong authenticator code", "sign_in_failed:Wrong email or password"]);
+    expect(staff.body.events[0]).toMatchObject({ userName: "Riya Sharma", audience: "staff", userAgent: ua["user-agent"] });
+    expect(staff.body.events[0].ip).toBeTruthy();
+
+    const customer = await http().get("/v1/admin/sign-ins").query({ q: phone }).set(as("admin")).expect(200);
+    expect(customer.body.events.map((e: { event: string; detail: string | null }) => `${e.event}:${e.detail}`)).toEqual(["sign_in:New account", "sign_in_failed:Wrong or expired code"]);
+    expect(customer.body.last24h.signIns).toBeGreaterThan(0);
+    expect(customer.body.last24h.failed).toBeGreaterThan(0);
+
+    const failedOnly = await http().get("/v1/admin/sign-ins").query({ event: "sign_in_failed" }).set(as("admin")).expect(200);
+    expect(failedOnly.body.events.every((e: { event: string }) => e.event === "sign_in_failed")).toBe(true);
+  });
+});

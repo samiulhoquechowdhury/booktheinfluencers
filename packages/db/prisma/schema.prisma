@@ -153,6 +153,7 @@ model User {
   favourites    Favourite[]
   sessions      Session[]
   auditEntries  AuditLog[]
+  loginEvents   LoginEvent[]
   notifications NotificationSeen?
 }
 
@@ -655,4 +656,29 @@ model HeroSlide {
   image Media? @relation(fields: [imageId], references: [id], onDelete: SetNull)
 
   @@index([active, position])
+}
+
+/// Sign-in history for staff, customers and artists: successes, failures, sign-outs, password changes.
+/// Read by the super admin (CRM → Audit log → Sign-ins); the worker prunes entries older than 180 days.
+model LoginEvent {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  userId     String?
+  /// What was typed: an email for staff, a phone number for customers and artists.
+  identifier String
+  userName   String?
+  /// "staff" | "customer" | "talent"
+  audience   String
+  /// "sign_in" | "sign_in_failed" | "sign_out" | "password_changed"
+  event      String
+  /// Human-readable reason or note, e.g. "Wrong password", "New account", "Authenticator set up".
+  detail     String?
+  ip         String?
+  userAgent  String?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([audience, event, createdAt])
 }

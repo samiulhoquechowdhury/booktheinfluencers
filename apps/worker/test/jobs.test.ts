@@ -3,7 +3,7 @@ import { createPrismaClient } from "@repo/db";
 import { toIstDateKey } from "@repo/utils";
 import type { Channel } from "../src/channels";
 import { MAX_ATTEMPTS, dispatchNotifications } from "../src/jobs/dispatch";
-import { expireQuotes, markOverdueMilestones, sendEventReminders } from "../src/jobs/schedules";
+import { LOGIN_HISTORY_DAYS, expireQuotes, markOverdueMilestones, pruneLoginEvents, sendEventReminders } from "../src/jobs/schedules";
 
 const db = createPrismaClient(process.env.DATABASE_URL);
 const DAY = 86_400_000;
@@ -108,5 +108,17 @@ describe("scheduled jobs", () => {
     expect(keys.some((k) => k?.endsWith(":talent"))).toBe(true);
     // Talent copy never mentions money.
     expect(rows.find((r) => r.dedupeKey?.endsWith(":talent"))!.body).not.toMatch(/₹|paise|price/i);
+  });
+});
+
+describe("sign-in history", () => {
+  it(`keeps ${LOGIN_HISTORY_DAYS} days and deletes older entries`, async () => {
+    const old = await db.loginEvent.create({ data: { audience: "staff", event: "sign_in", identifier: "old@demo.in", createdAt: new Date(Date.now() - (LOGIN_HISTORY_DAYS + 1) * DAY) } });
+    const recent = await db.loginEvent.create({ data: { audience: "staff", event: "sign_in", identifier: "recent@demo.in", createdAt: new Date(Date.now() - 5 * DAY) } });
+    const { deleted } = await pruneLoginEvents(db);
+    expect(deleted).toBeGreaterThanOrEqual(1);
+    expect(await db.loginEvent.findUnique({ where: { id: old.id } })).toBeNull();
+    expect(await db.loginEvent.findUnique({ where: { id: recent.id } })).not.toBeNull();
+    await db.loginEvent.delete({ where: { id: recent.id } });
   });
 });

@@ -5,6 +5,7 @@
 import { allowedNextStages, type LeadStage } from "@repo/utils";
 import { TALENTS } from "@repo/mock/catalogue/data";
 import { internalFor, type StaffUser } from "@repo/mock/internal";
+import { signIns } from "@repo/mock/login-events";
 import { createHero, deleteHero, listHero, reorderHero, updateHero, uploadMedia } from "@repo/mock/site";
 import {
   changeStaffPassword,
@@ -16,6 +17,7 @@ import {
   staffCodeStep,
   staffDirectory,
   staffPasswordStep,
+  staffSignOut,
   toStaffUser,
   transferSuperAdmin,
   updateStaff,
@@ -73,6 +75,7 @@ function actor(): StaffUser {
 }
 
 export type StaffSession = StaffUser & { mustChangePassword: boolean };
+export type SignInFilters = { audience?: string; event?: string; q?: string; userId?: string; before?: string };
 export type PasswordStep = { staffId: string; setup?: { secret: string; uri: string } };
 
 const talentOf = (slug: string) => TALENTS.find((t) => t.slug === slug);
@@ -154,7 +157,12 @@ export const mockApi = {
         return { ...toStaffUser(account), mustChangePassword: account.mustChangePassword };
       }),
     changePassword: (current: string, next: string) => call(() => mutate((db) => changeStaffPassword(db, actor().id, { current, next }))),
-    signOut: () => call(() => writeStaffId(null)),
+    signOut: () =>
+      call(() => {
+        const id = readStaffId();
+        if (id) mutate((db) => staffSignOut(db, id));
+        writeStaffId(null);
+      }),
   },
 
   staff: {
@@ -166,6 +174,7 @@ export const mockApi = {
     resetPassword: (id: string) => call(() => mutate((db) => resetStaffPassword(db, actor(), id))),
     resetMfa: (id: string) => call(() => mutate((db) => resetStaffMfa(db, actor(), id))),
     transfer: (id: string, input: SuperAdminTransferInput) => call(() => mutate((db) => transferSuperAdmin(db, actor(), id, input))),
+    signIns: (filters: SignInFilters = {}) => call(() => signIns(loadDb(), actor(), filters)),
   },
 
   site: {

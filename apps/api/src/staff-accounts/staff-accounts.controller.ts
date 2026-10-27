@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query } from "@nestjs/common";
 import { z } from "zod";
 import { StaffCreateSchema, StaffUpdateSchema, SuperAdminTransferSchema } from "@repo/schemas";
 import { parse } from "../common/validate";
@@ -6,6 +6,13 @@ import { CurrentUser, Roles, STAFF_ROLES, type AuthUser } from "../auth/guard";
 import { StaffAccountsService } from "./staff-accounts.service";
 
 const Active = z.object({ active: z.boolean() });
+const SignInFilters = z.object({
+  audience: z.enum(["staff", "customer", "talent"]).optional(),
+  event: z.enum(["sign_in", "sign_in_failed", "sign_out", "password_changed"]).optional(),
+  q: z.string().max(120).optional(),
+  userId: z.string().max(60).optional(),
+  before: z.iso.datetime().optional(),
+});
 
 /** Staff accounts. The super admin only, except the directory of active names used by owner pickers. */
 @Controller("admin")
@@ -16,6 +23,13 @@ export class StaffAccountsController {
   @Roles(...STAFF_ROLES)
   directory() {
     return this.staff.directory();
+  }
+
+  /** Sign-in history for staff, customers and artists (CRM → Audit log → Sign-ins). */
+  @Get("sign-ins")
+  @Roles("SUPER_ADMIN")
+  signIns(@CurrentUser() user: AuthUser, @Query() query: unknown) {
+    return this.staff.signIns(user, parse(SignInFilters, query));
   }
 
   @Get("staff")

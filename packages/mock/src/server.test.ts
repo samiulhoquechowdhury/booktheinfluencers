@@ -41,6 +41,7 @@ function emptyDb(): MockDb {
     staffAccounts: [],
     heroSlides: [],
     media: {},
+    loginEvents: [],
     processedWebhooks: [],
     messages: [],
     contactRequests: [],

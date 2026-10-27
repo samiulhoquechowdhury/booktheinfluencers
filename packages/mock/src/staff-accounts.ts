@@ -1,6 +1,7 @@
 import { ChangePasswordSchema, StaffCreateSchema, StaffUpdateSchema, SuperAdminTransferSchema, type StaffAccount } from "@repo/schemas";
 import { DEMO_OTP, STAFF_DEMO_PASSWORD, STAFF_USERS, type StaffUser } from "./internal";
 import { ApiError, newId, nowIso } from "./server";
+import { recordLogin } from "./login-events";
 import { audit } from "./staff";
 import type { MockDb, StaffAccountRec } from "./types";
 
@@ -44,21 +45,42 @@ const temporaryPassword = () => `Temp-${Math.random().toString(36).slice(2, 8)}-
 // ---------- Sign-in ----------
 
 export function staffPasswordStep(db: MockDb, email: string, password: string) {
-  const account = db.staffAccounts.find((a) => a.email === email.trim().toLowerCase());
-  if (!account || account.password !== password) throw new ApiError("INVALID_LOGIN", "Email or password is incorrect");
-  if (!account.active) throw new ApiError("ACCOUNT_DISABLED", "This account has been deactivated. Ask a super admin to restore it.");
+  const typed = email.trim().toLowerCase();
+  const account = db.staffAccounts.find((a) => a.email === typed);
+  const fail = (detail: string) => recordLogin(db, { audience: "staff", event: "sign_in_failed", identifier: typed, userId: account?.id ?? null, userName: account?.name ?? null, detail });
+  if (!account || account.password !== password) {
+    fail("Wrong email or password");
+    throw new ApiError("INVALID_LOGIN", "Email or password is incorrect");
+  }
+  if (!account.active) {
+    fail("Account deactivated");
+    throw new ApiError("ACCOUNT_DISABLED", "This account has been deactivated. Ask a super admin to restore it.");
+  }
   if (account.mfaEnrolled) return { staffId: account.id };
   const secret = "DEMODEMODEMODEMODEMODEMODEMODEMO";
   return { staffId: account.id, setup: { secret, uri: `otpauth://totp/Book%20The%20Influencers:${encodeURIComponent(account.email)}?secret=${secret}&issuer=Book%20The%20Influencers` } };
 }
 
 export function staffCodeStep(db: MockDb, staffId: string, code: string) {
-  if (code !== DEMO_OTP) throw new ApiError("OTP_INVALID", "That code is not right");
   const account = mustAccount(db, staffId);
-  if (!account.active) throw new ApiError("ACCOUNT_DISABLED", "This account has been deactivated. Ask a super admin to restore it.");
+  const who = { audience: "staff" as const, identifier: account.email, userId: account.id, userName: account.name };
+  if (code !== DEMO_OTP) {
+    recordLogin(db, { ...who, event: "sign_in_failed", detail: "Wrong authenticator code" });
+    throw new ApiError("OTP_INVALID", "That code is not right");
+  }
+  if (!account.active) {
+    recordLogin(db, { ...who, event: "sign_in_failed", detail: "Account deactivated" });
+    throw new ApiError("ACCOUNT_DISABLED", "This account has been deactivated. Ask a super admin to restore it.");
+  }
+  recordLogin(db, { ...who, event: "sign_in", detail: !account.mfaEnrolled ? "Authenticator set up" : account.mustChangePassword ? "Temporary password" : null });
   account.mfaEnrolled = true;
   account.lastLoginAt = nowIso();
   return account;
+}
+
+export function staffSignOut(db: MockDb, staffId: string) {
+  const account = db.staffAccounts.find((a) => a.id === staffId);
+  if (account) recordLogin(db, { audience: "staff", event: "sign_out", identifier: account.email, userId: account.id, userName: account.name, detail: null });
 }
 
 export function changeStaffPassword(db: MockDb, staffId: string, raw: unknown) {
@@ -66,6 +88,7 @@ export function changeStaffPassword(db: MockDb, staffId: string, raw: unknown) {
   const account = mustAccount(db, staffId);
   if (account.password !== current) throw new ApiError("INVALID_PASSWORD", "Your current password is not right");
   if (current === next) throw new ApiError("VALIDATION", "Choose a password you haven't used here");
+  recordLogin(db, { audience: "staff", event: "password_changed", identifier: account.email, userId: account.id, userName: account.name, detail: account.mustChangePassword ? "Replaced temporary password" : null });
   account.password = next;
   account.mustChangePassword = false;
 }
