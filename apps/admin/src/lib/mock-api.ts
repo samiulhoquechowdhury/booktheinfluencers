@@ -6,6 +6,7 @@ import { allowedNextStages, type LeadStage } from "@repo/utils";
 import { TALENTS } from "@repo/mock/catalogue/data";
 import { internalFor, type StaffUser } from "@repo/mock/internal";
 import { contractPdfData, quotePdfData } from "@repo/mock/documents";
+import { reconciliationOverview, runReconciliation } from "@repo/mock/reconcile";
 import { pdfFonts, saveBlob } from "./download";
 import { createFollowUp, followUpsFor, myFollowUps, nextFollowUpAt, updateFollowUp } from "@repo/mock/follow-ups";
 import { signIns } from "@repo/mock/login-events";
@@ -179,6 +180,11 @@ export const mockApi = {
     resetMfa: (id: string) => call(() => mutate((db) => resetStaffMfa(db, actor(), id))),
     transfer: (id: string, input: SuperAdminTransferInput) => call(() => mutate((db) => transferSuperAdmin(db, actor(), id, input))),
     signIns: (filters: SignInFilters = {}) => call(() => signIns(loadDb(), actor(), filters)),
+  },
+
+  reconciliation: {
+    overview: () => call(() => reconciliationOverview(loadDb(), actor())),
+    run: () => call(() => mutate((db) => runReconciliation(db, actor()))),
   },
 
   documents: {

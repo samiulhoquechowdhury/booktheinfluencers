@@ -108,6 +108,7 @@ export function buildSeed(): MockDb {
     media: {},
     loginEvents: [],
     followUps: [],
+    reconciliationRuns: [],
     processedWebhooks: [],
     messages: [],
     contactRequests: [],

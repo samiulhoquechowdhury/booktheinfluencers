@@ -9,6 +9,7 @@ import { api, can, errorMessage } from "@/lib/api";
 import { MILESTONE_LABELS, inr } from "@/lib/format";
 import { keys, useStaffMutation, useStaffSession } from "@/lib/hooks";
 import { Failure, Loading, PageHeader, Pill, inputClass } from "@/components/ui";
+import { ReconciliationCard } from "@/components/reconciliation-card";
 
 const FILTERS: { id: string; label: string; match: (s: MilestoneStatus) => boolean }[] = [
   { id: "open", label: "Outstanding", match: (s) => s === "PENDING" || s === "LINK_SENT" || s === "OVERDUE" },
@@ -34,6 +35,7 @@ export default function PaymentsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Payments" description={`Outstanding: ${inr(outstanding)}. Gateway payments update automatically; bank transfers are recorded here.`} />
+      {can(staff, "ACCOUNTS") && <ReconciliationCard />}
       <div role="group" aria-label="Filter" className="flex gap-1">
         {FILTERS.map((f) => (
           <button key={f.id} type="button" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)} className={`rounded-md px-3 py-1.5 text-sm ${filter === f.id ? "bg-ink text-white" : "bg-white text-muted hover:text-ink"}`}>

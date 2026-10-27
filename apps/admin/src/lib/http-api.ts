@@ -2,7 +2,7 @@
 
 import { ApiError } from "@repo/mock/server";
 import { STAFF_ROLES, type StaffRole } from "@repo/mock/internal";
-import type { FollowUpRecord, HeroSlideRecord, ImportResult, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
+import type { FollowUpRecord, HeroSlideRecord, ImportResult, ReconciliationOverview, ReconciliationRunRecord, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
 import { saveBlob } from "./download";
 import type { mockApi, LeadDetail, LeadRow, StaffSession } from "./mock-api";
 
@@ -286,6 +286,11 @@ export const httpApi: typeof mockApi = {
       const query = new URLSearchParams(Object.entries(filters).filter((e): e is [string, string] => Boolean(e[1])));
       return request<SignInsPage>(`/admin/sign-ins${query.size ? `?${query}` : ""}`);
     },
+  },
+
+  reconciliation: {
+    overview: () => request<ReconciliationOverview>("/admin/reconciliation"),
+    run: () => post<ReconciliationRunRecord>("/admin/reconciliation/run"),
   },
 
   documents: {

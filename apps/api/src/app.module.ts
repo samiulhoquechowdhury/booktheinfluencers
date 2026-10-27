@@ -16,6 +16,7 @@ import { StaffService } from "./staff/staff.service";
 import { CustomerDocumentsController, StaffDocumentsController } from "./documents/documents.controller";
 import { DocumentsService } from "./documents/documents.service";
 import { FollowUpsController } from "./follow-ups/follow-ups.controller";
+import { ReconciliationController } from "./reconciliation/reconciliation.controller";
 import { FollowUpsService } from "./follow-ups/follow-ups.service";
 import { SiteController } from "./site/site.controller";
 import { SiteService } from "./site/site.service";
@@ -43,6 +44,7 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     FollowUpsController,
     CustomerDocumentsController,
     StaffDocumentsController,
+    ReconciliationController,
     WebhooksController,
     // Simulated provider screens never ship to production.
     ...(env.NODE_ENV === "production" ? [] : [DevProvidersController]),

@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { createPrismaClient } from "@repo/db";
+import { createPrismaClient, reconcilePayments } from "@repo/db";
 import { toIstDateKey } from "@repo/utils";
 import type { Channel } from "../src/channels";
 import { MAX_ATTEMPTS, dispatchNotifications } from "../src/jobs/dispatch";
@@ -140,5 +140,35 @@ describe("follow-up reminders", () => {
     expect(await db.notification.count({ where: { event: "followup.due", body: { contains: "Done already" } } })).toBe(0);
     await db.notification.deleteMany({ where: { event: "followup.due" } });
     await db.followUp.deleteMany({ where: { id: { in: [due.id, later.id, done.id] } } });
+  });
+});
+
+describe("payment reconciliation", () => {
+  it("flags mismatches between instalments, payments and webhooks, saves the run and emails accounts", async () => {
+    const lead = await demoLead();
+    const booking = await db.booking.findFirstOrThrow({ where: { leadId: lead.id } });
+    const tag = `Recon ${Date.now()}`;
+    const paidNoMoney = await db.paymentMilestone.create({ data: { bookingId: booking.id, label: `${tag} A`, amountPaise: 1_000_000n, dueDate: new Date(), status: "PAID" } });
+    const notApplied = await db.paymentMilestone.create({ data: { bookingId: booking.id, label: `${tag} B`, amountPaise: 500_000n, dueDate: new Date(), status: "LINK_SENT" } });
+    await db.payment.create({ data: { milestoneId: notApplied.id, method: "upi", gatewayPaymentId: `pay_${Date.now()}`, amountPaise: 500_000n, status: "captured", receivedAt: new Date() } });
+    const hook = await db.webhookEvent.create({ data: { id: `evt_${Date.now()}`, provider: "payments", payload: {}, receivedAt: new Date(Date.now() - 2 * 60 * 60_000) } });
+
+    try {
+      const run = await reconcilePayments(db, { trigger: "test" });
+      const mine = run.findings.filter((f) => f.message.includes(tag) || f.message.includes(hook.id));
+      expect(mine.map((f) => f.code).sort()).toEqual(["PAID_WITHOUT_PAYMENT", "PAYMENT_NOT_APPLIED", "WEBHOOK_NOT_PROCESSED"]);
+      expect(mine.find((f) => f.code === "PAID_WITHOUT_PAYMENT")).toMatchObject({ severity: "error", ref: lead.ref, leadId: lead.id, amountPaise: "1000000" });
+      expect(run.ok).toBe(false);
+
+      const saved = await db.reconciliationRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(saved).toMatchObject({ trigger: "test", ok: false, errorCount: run.errorCount, warnCount: run.warnCount });
+      const mail = await db.notification.findFirst({ where: { event: "reconciliation.issues", to: "accounts@demo.in" }, orderBy: { createdAt: "desc" } });
+      expect(mail?.subject).toMatch(/Payment check: \d+ issues? to look at/);
+    } finally {
+      await db.payment.deleteMany({ where: { milestoneId: notApplied.id } });
+      await db.paymentMilestone.deleteMany({ where: { id: { in: [paidNoMoney.id, notApplied.id] } } });
+      await db.webhookEvent.delete({ where: { id: hook.id } });
+      await db.notification.deleteMany({ where: { event: "reconciliation.issues" } });
+    }
   });
 });

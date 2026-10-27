@@ -16,6 +16,7 @@ export const keys = {
   hero: ["site", "hero"] as const,
   followUps: (leadId: string) => ["leads", leadId, "follow-ups"] as const,
   myFollowUps: ["follow-ups", "mine"] as const,
+  reconciliation: ["reconciliation"] as const,
   talent: (slug: string) => ["talents", slug] as const,
   blackouts: (slug: string) => ["talents", slug, "blackouts"] as const,
   inbox: ["inbox"] as const,

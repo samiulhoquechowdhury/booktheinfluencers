@@ -7,6 +7,7 @@ import type {
   QuoteStatus,
   HeroSlideRecord,
   LoginEventRecord,
+  ReconciliationRunRecord,
   StaffRoleName,
   TalentAdminDetail,
 } from "@repo/schemas";
@@ -178,6 +179,8 @@ export type MockDb = {
   /** Home page hero carousel and the images uploaded for it (data URLs in demo mode). */
   heroSlides: HeroSlideRec[];
   media: Record<string, string>;
+  /** Payment reconciliation runs, newest first (CRM → Payments). */
+  reconciliationRuns: ReconciliationRunRecord[];
   /** Sales follow-ups on leads. */
   followUps: FollowUpRec[];
   /** Sign-in history, newest first (CRM → Audit log → Sign-ins). */

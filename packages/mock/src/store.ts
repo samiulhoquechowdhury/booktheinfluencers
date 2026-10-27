@@ -80,6 +80,7 @@ function upgrade(db: MockDb): MockDb {
   db.media ??= {};
   db.loginEvents ??= [];
   db.followUps ??= [];
+  db.reconciliationRuns ??= [];
   return db;
 }
 

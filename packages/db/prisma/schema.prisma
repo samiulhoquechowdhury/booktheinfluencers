@@ -708,3 +708,22 @@ model FollowUp {
   @@index([assigneeId, doneAt, dueAt])
   @@index([doneAt, reminderSentAt, dueAt])
 }
+
+/// Nightly payment reconciliation (apps/worker reconcile-payments; Accounts can also run it from the CRM).
+/// Cross-checks milestones, captured payments, webhooks and payouts; `findings` lists every mismatch.
+model ReconciliationRun {
+  id         String   @id @default(cuid())
+  ranAt      DateTime @default(now())
+  /// "schedule" or the staff member's name for a manual run
+  trigger    String
+  ok         Boolean
+  errorCount Int
+  warnCount  Int
+  /// [{ code, severity, message, leadId, ref, amountPaise? }]
+  findings   Json
+  /// { capturedPaise, paidMilestones, payoutsPaidPaise, checkedMilestones, checkedPayouts }
+  totals     Json
+  durationMs Int
+
+  @@index([ranAt])
+}
