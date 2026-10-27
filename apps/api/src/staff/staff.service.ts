@@ -78,6 +78,7 @@ export class StaffService {
         owner: { select: { name: true } },
         customer: { select: { phone: true } },
         bookings: { include: { talent: { select: { slug: true, stageName: true, categories: { include: { category: true } } } }, quotes: true } },
+        followUps: { where: { doneAt: null }, orderBy: { dueAt: "asc" }, take: 1, select: { dueAt: true } },
       },
     });
     return leads.map((lead) => {
@@ -99,6 +100,8 @@ export class StaffService {
         categories: [...new Set(lead.bookings.flatMap((b) => b.talent.categories.map((c) => c.category.slug)))],
         valuePaise: value > 0n ? value : null,
         bookings: lead.bookings.map((b) => ({ id: b.id, slug: b.talent.slug, name: b.talent.stageName, availability: b.availability })),
+        /** Soonest open follow-up, for the pipeline badge. */
+        nextFollowUpAt: lead.followUps[0]?.dueAt.toISOString() ?? null,
       };
     });
   }

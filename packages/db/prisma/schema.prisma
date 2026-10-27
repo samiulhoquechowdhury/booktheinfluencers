@@ -147,14 +147,16 @@ model User {
   updatedAt          DateTime  @updatedAt
   deletedAt          DateTime?
 
-  talent        Talent?
-  leads         Lead[]            @relation("CustomerLeads")
-  ownedLeads    Lead[]            @relation("LeadOwner")
-  favourites    Favourite[]
-  sessions      Session[]
-  auditEntries  AuditLog[]
-  loginEvents   LoginEvent[]
-  notifications NotificationSeen?
+  talent            Talent?
+  leads             Lead[]            @relation("CustomerLeads")
+  ownedLeads        Lead[]            @relation("LeadOwner")
+  favourites        Favourite[]
+  sessions          Session[]
+  auditEntries      AuditLog[]
+  loginEvents       LoginEvent[]
+  followUpsAssigned FollowUp[]        @relation("FollowUpAssignee")
+  followUpsCreated  FollowUp[]        @relation("FollowUpCreator")
+  notifications     NotificationSeen?
 }
 
 model Session {
@@ -340,6 +342,7 @@ model Lead {
   bookings   Booking[]
   activities Activity[]
   messages   Message[]
+  followUps  FollowUp[]
 
   @@index([stage, ownerId])
   @@index([eventDate])
@@ -681,4 +684,27 @@ model LoginEvent {
   @@index([createdAt])
   @@index([userId, createdAt])
   @@index([audience, event, createdAt])
+}
+
+/// Sales follow-ups on a lead ("call back Friday 10 am"). The worker reminds the assignee when one falls due.
+model FollowUp {
+  id             String    @id @default(cuid())
+  leadId         String
+  assigneeId     String
+  createdById    String
+  title          String
+  note           String?
+  dueAt          DateTime
+  doneAt         DateTime?
+  doneById       String?
+  reminderSentAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  lead      Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignee  User @relation("FollowUpAssignee", fields: [assigneeId], references: [id])
+  createdBy User @relation("FollowUpCreator", fields: [createdById], references: [id])
+
+  @@index([leadId])
+  @@index([assigneeId, doneAt, dueAt])
+  @@index([doneAt, reminderSentAt, dueAt])
 }

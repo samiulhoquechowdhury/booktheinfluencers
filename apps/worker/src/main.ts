@@ -4,7 +4,7 @@ import { createPrismaClient } from "@repo/db";
 import { consoleChannel } from "./channels";
 import { loadEnv } from "./env";
 import { dispatchNotifications } from "./jobs/dispatch";
-import { expireQuotes, markOverdueMilestones, pruneLoginEvents, sendEventReminders } from "./jobs/schedules";
+import { expireQuotes, markOverdueMilestones, pruneLoginEvents, sendEventReminders, sendFollowUpReminders } from "./jobs/schedules";
 
 // BullMQ job schedulers on Redis drive the jobs; each job is a plain function over the database.
 
@@ -20,6 +20,7 @@ const JOBS = {
   "overdue-milestones": { every: 60 * 60_000, run: () => markOverdueMilestones(db) },
   "event-reminders": { every: 60 * 60_000, run: () => sendEventReminders(db) },
   "prune-login-events": { every: 24 * 60 * 60_000, run: () => pruneLoginEvents(db) },
+  "follow-up-reminders": { every: 5 * 60_000, run: () => sendFollowUpReminders(db) },
 } as const;
 type JobName = keyof typeof JOBS;
 

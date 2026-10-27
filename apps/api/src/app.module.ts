@@ -13,6 +13,8 @@ import { MeController } from "./me/me.controller";
 import { PrismaService } from "./prisma/prisma.service";
 import { StaffController } from "./staff/staff.controller";
 import { StaffService } from "./staff/staff.service";
+import { FollowUpsController } from "./follow-ups/follow-ups.controller";
+import { FollowUpsService } from "./follow-ups/follow-ups.service";
 import { SiteController } from "./site/site.controller";
 import { SiteService } from "./site/site.service";
 import { StaffAccountsController } from "./staff-accounts/staff-accounts.controller";
@@ -36,6 +38,7 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     TalentAdminController,
     StaffAccountsController,
     SiteController,
+    FollowUpsController,
     WebhooksController,
     // Simulated provider screens never ship to production.
     ...(env.NODE_ENV === "production" ? [] : [DevProvidersController]),
@@ -47,6 +50,7 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     TalentAdminService,
     StaffAccountsService,
     SiteService,
+    FollowUpsService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],

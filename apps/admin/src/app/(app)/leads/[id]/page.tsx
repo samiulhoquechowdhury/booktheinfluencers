@@ -11,6 +11,7 @@ import { api, can, errorMessage, type LeadDetail, type StaffUser } from "@/lib/a
 import { STAGE_LABELS, inr, istDate, stageTone } from "@/lib/format";
 import { keys, useStaffMutation, useStaffSession } from "@/lib/hooks";
 import { Card, Failure, Loading, Pill, inputClass } from "@/components/ui";
+import { FollowUps } from "@/components/lead/follow-ups";
 import { BookingPanel } from "@/components/lead/booking-panel";
 
 const NEEDS_REASON: LeadStage[] = ["LOST", "CANCELLED", "EVENT_COMPLETED"];
@@ -57,6 +58,7 @@ function Workspace({ lead, staff }: { lead: LeadDetail; staff: StaffUser }) {
           )}
         </div>
         <aside className="space-y-5">
+          <FollowUps leadId={lead.id} ownerName={lead.ownerName} />
           <Customer lead={lead} />
           <Brief lead={lead} />
           <CustomerMessages lead={lead} />

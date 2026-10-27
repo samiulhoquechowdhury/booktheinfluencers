@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, BellRing } from "lucide-react";
+import { AlarmClock, ArrowRight, BellRing } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorMessage } from "@/lib/api";
 import { PIPELINE_COLUMNS, STAGE_LABELS, inr, inrCompact, percent } from "@/lib/format";
 import { keys, useStaffSession } from "@/lib/hooks";
-import { Card, Failure, Loading, PageHeader } from "@/components/ui";
+import { Card, Failure, Loading, PageHeader, Pill } from "@/components/ui";
+import { dueLabel, followUpState } from "@/components/lead/follow-ups";
 
 export default function OverviewPage() {
   const { data: staff } = useStaffSession();
@@ -56,6 +57,8 @@ export default function OverviewPage() {
         )}
       </dl>
 
+      <MyFollowUps />
+
       <Card title="Leads by stage" actions={<Link href="/pipeline" className="text-sm font-medium text-gold-deep hover:underline">Open pipeline</Link>}>
         <ul className="space-y-2">
           {PIPELINE_COLUMNS.map((stage) => {
@@ -91,5 +94,45 @@ function Stat({ label, value, hint, finance = false }: { label: string; value: s
       <dd className="mt-1.5 text-2xl font-semibold tracking-tight text-ink">{value}</dd>
       {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
     </div>
+  );
+}
+
+/** The signed-in person's open follow-ups: overdue first, then today, then the next few. */
+function MyFollowUps() {
+  const { data, isPending } = useQuery({ queryKey: keys.myFollowUps, queryFn: api.followUps.mine, refetchInterval: 60_000 });
+  if (isPending || !data) return null;
+  const overdue = data.filter((f) => followUpState(f.dueAt) === "overdue").length;
+  return (
+    <Card
+      title={
+        <span className="flex items-center gap-2">
+          <AlarmClock className="size-4 text-gold-deep" aria-hidden />
+          My follow-ups
+          {overdue > 0 && <Pill tone="danger">{overdue} overdue</Pill>}
+        </span>
+      }
+    >
+      {data.length === 0 ? (
+        <p className="text-sm text-muted">You're all caught up. Follow-ups you set on leads show here.</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {data.slice(0, 8).map((f) => {
+            const state = followUpState(f.dueAt);
+            return (
+              <li key={f.id}>
+                <Link href={`/leads/${f.leadId}`} className="flex flex-wrap items-center justify-between gap-2 py-2.5 hover:bg-cream-soft">
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-ink">{f.title}</span>
+                    <span className="text-xs text-muted">{f.leadRef} · {f.contactName}</span>
+                  </span>
+                  <Pill tone={state === "overdue" ? "danger" : state === "today" ? "action" : "info"}>{state === "overdue" ? `Overdue · ${dueLabel(f.dueAt)}` : dueLabel(f.dueAt)}</Pill>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {data.length > 8 && <p className="mt-2 text-xs text-muted">And {data.length - 8} more on your leads.</p>}
+    </Card>
   );
 }

@@ -178,6 +178,8 @@ export type MockDb = {
   /** Home page hero carousel and the images uploaded for it (data URLs in demo mode). */
   heroSlides: HeroSlideRec[];
   media: Record<string, string>;
+  /** Sales follow-ups on leads. */
+  followUps: FollowUpRec[];
   /** Sign-in history, newest first (CRM → Audit log → Sign-ins). */
   loginEvents: LoginEventRecord[];
   /** Built-in hero slides already added to this browser's store (so deleted ones don't come back). */
@@ -195,6 +197,18 @@ export type StaffAccountRec = {
   mustChangePassword: boolean;
   mfaEnrolled: boolean;
   lastLoginAt: string | null;
+  createdAt: string;
+};
+
+export type FollowUpRec = {
+  id: string;
+  leadId: string;
+  assigneeId: string;
+  createdById: string;
+  title: string;
+  note: string | null;
+  dueAt: string;
+  doneAt: string | null;
   createdAt: string;
 };
 

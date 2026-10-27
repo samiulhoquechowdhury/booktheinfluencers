@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Columns3, Rows3, Search, X } from "lucide-react";
+import { AlarmClock, CalendarDays, Columns3, Rows3, Search, X } from "lucide-react";
+import { followUpState } from "@/components/lead/follow-ups";
 import { formatDate, type LeadStage } from "@repo/utils";
 import { CATEGORIES } from "@repo/mock/catalogue/data";
 import { api, errorMessage, type LeadRow } from "@/lib/api";
@@ -223,7 +224,15 @@ function LeadCard({ lead }: { lead: LeadRow }) {
           ))}
         </ul>
       )}
-      <p className="mt-2 text-xs text-muted">{lead.ownerName ?? "Unassigned"}</p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="truncate text-xs text-muted">{lead.ownerName ?? "Unassigned"}</p>
+        {lead.nextFollowUpAt && followUpState(lead.nextFollowUpAt) !== "later" && (
+          <Pill tone={followUpState(lead.nextFollowUpAt) === "overdue" ? "danger" : "action"}>
+            <AlarmClock className="size-3" aria-hidden />
+            {followUpState(lead.nextFollowUpAt) === "overdue" ? "Follow-up overdue" : "Follow-up today"}
+          </Pill>
+        )}
+      </div>
     </Link>
   );
 }

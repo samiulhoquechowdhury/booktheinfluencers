@@ -5,6 +5,7 @@
 import { allowedNextStages, type LeadStage } from "@repo/utils";
 import { TALENTS } from "@repo/mock/catalogue/data";
 import { internalFor, type StaffUser } from "@repo/mock/internal";
+import { createFollowUp, followUpsFor, myFollowUps, nextFollowUpAt, updateFollowUp } from "@repo/mock/follow-ups";
 import { signIns } from "@repo/mock/login-events";
 import { createHero, deleteHero, listHero, reorderHero, updateHero, uploadMedia } from "@repo/mock/site";
 import {
@@ -57,7 +58,7 @@ import {
 } from "@repo/mock/staff";
 import { loadDb, mutate, readStaffId, writeStaffId } from "@repo/mock/store";
 import { addRep, allTalentRecords, createTalent, importTalentCsv, setRateCard, setRepVerification, setTalentStatus, talentDetail, updateTalent } from "@repo/mock/talent-admin";
-import type { HeroSlideInput, StaffCreateInput, StaffUpdateInput, SuperAdminTransferInput, ProfileStatus, RateCardInput, RepInput, TalentInput, VerificationStatus } from "@repo/schemas";
+import type { FollowUpInput, FollowUpUpdate, HeroSlideInput, StaffCreateInput, StaffUpdateInput, SuperAdminTransferInput, ProfileStatus, RateCardInput, RepInput, TalentInput, VerificationStatus } from "@repo/schemas";
 import type { LeadRec, MockDb, TalentApplicationRec } from "@repo/mock/types";
 
 
@@ -101,6 +102,7 @@ function leadRow(db: MockDb, lead: LeadRec) {
     categories: [...new Set(bookings.flatMap((b) => talentOf(b.talentSlug)?.categories ?? []))],
     valuePaise: latestTotal > 0n ? String(latestTotal) : null,
     bookings: bookings.map((b) => ({ id: b.id, slug: b.talentSlug, name: talentOf(b.talentSlug)?.stageName ?? b.talentSlug, availability: b.availability })),
+    nextFollowUpAt: nextFollowUpAt(db, lead.id),
   };
 }
 export type LeadRow = ReturnType<typeof leadRow>;
@@ -175,6 +177,13 @@ export const mockApi = {
     resetMfa: (id: string) => call(() => mutate((db) => resetStaffMfa(db, actor(), id))),
     transfer: (id: string, input: SuperAdminTransferInput) => call(() => mutate((db) => transferSuperAdmin(db, actor(), id, input))),
     signIns: (filters: SignInFilters = {}) => call(() => signIns(loadDb(), actor(), filters)),
+  },
+
+  followUps: {
+    forLead: (leadId: string) => call(() => (actor(), followUpsFor(loadDb(), leadId))),
+    mine: () => call(() => myFollowUps(loadDb(), actor())),
+    create: (leadId: string, input: FollowUpInput) => call(() => mutate((db) => createFollowUp(db, actor(), leadId, input))),
+    update: (id: string, change: FollowUpUpdate) => call(() => mutate((db) => updateFollowUp(db, actor(), id, change))),
   },
 
   site: {

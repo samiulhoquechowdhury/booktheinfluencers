@@ -107,6 +107,7 @@ export function buildSeed(): MockDb {
     heroDefaultsVersion: 4,
     media: {},
     loginEvents: [],
+    followUps: [],
     processedWebhooks: [],
     messages: [],
     contactRequests: [],

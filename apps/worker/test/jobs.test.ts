@@ -3,7 +3,7 @@ import { createPrismaClient } from "@repo/db";
 import { toIstDateKey } from "@repo/utils";
 import type { Channel } from "../src/channels";
 import { MAX_ATTEMPTS, dispatchNotifications } from "../src/jobs/dispatch";
-import { LOGIN_HISTORY_DAYS, expireQuotes, markOverdueMilestones, pruneLoginEvents, sendEventReminders } from "../src/jobs/schedules";
+import { LOGIN_HISTORY_DAYS, expireQuotes, markOverdueMilestones, pruneLoginEvents, sendEventReminders, sendFollowUpReminders } from "../src/jobs/schedules";
 
 const db = createPrismaClient(process.env.DATABASE_URL);
 const DAY = 86_400_000;
@@ -120,5 +120,25 @@ describe("sign-in history", () => {
     expect(await db.loginEvent.findUnique({ where: { id: old.id } })).toBeNull();
     expect(await db.loginEvent.findUnique({ where: { id: recent.id } })).not.toBeNull();
     await db.loginEvent.delete({ where: { id: recent.id } });
+  });
+});
+
+describe("follow-up reminders", () => {
+  it("reminds the assignee once when a follow-up falls due, and not for done ones", async () => {
+    const lead = await demoLead();
+    const staff = await db.user.findFirstOrThrow({ where: { email: "sales@demo.in" } });
+    const due = await db.followUp.create({ data: { leadId: lead.id, assigneeId: staff.id, createdById: staff.id, title: "Call back about the date", dueAt: new Date(Date.now() - 60_000) } });
+    const later = await db.followUp.create({ data: { leadId: lead.id, assigneeId: staff.id, createdById: staff.id, title: "Later", dueAt: new Date(Date.now() + DAY) } });
+    const done = await db.followUp.create({ data: { leadId: lead.id, assigneeId: staff.id, createdById: staff.id, title: "Done already", dueAt: new Date(Date.now() - DAY), doneAt: new Date() } });
+
+    const first = await sendFollowUpReminders(db);
+    expect(first.sent).toBeGreaterThanOrEqual(1);
+    const mail = await db.notification.findFirst({ where: { event: "followup.due", body: { contains: "Call back about the date" } }, orderBy: { createdAt: "desc" } });
+    expect(mail).toMatchObject({ channel: "EMAIL", to: "sales@demo.in", subject: `Follow-up due · ${lead.ref}` });
+    expect((await sendFollowUpReminders(db)).sent).toBe(0); // only once
+    expect(await db.notification.count({ where: { event: "followup.due", body: { contains: "Later" } } })).toBe(0);
+    expect(await db.notification.count({ where: { event: "followup.due", body: { contains: "Done already" } } })).toBe(0);
+    await db.notification.deleteMany({ where: { event: "followup.due" } });
+    await db.followUp.deleteMany({ where: { id: { in: [due.id, later.id, done.id] } } });
   });
 });

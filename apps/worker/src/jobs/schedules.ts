@@ -1,4 +1,4 @@
-import { notifyCustomer, notifyTalent, type PrismaClient } from "@repo/db";
+import { notifyCustomer, notifyStaff, notifyTalent, type PrismaClient } from "@repo/db";
 import { formatINR, toIstDateKey } from "@repo/utils";
 
 const DAY = 86_400_000;
@@ -77,4 +77,31 @@ export async function pruneLoginEvents(db: PrismaClient, now = new Date()) {
   const cutoff = new Date(now.getTime() - LOGIN_HISTORY_DAYS * 24 * 60 * 60_000);
   const { count } = await db.loginEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });
   return { deleted: count };
+}
+
+const dueLabel = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+
+/** Sales follow-ups: tell the assignee once when one falls due (moving the due time re-arms it). */
+export async function sendFollowUpReminders(db: PrismaClient, now = new Date()) {
+  const due = await db.followUp.findMany({
+    where: { doneAt: null, reminderSentAt: null, dueAt: { lte: now } },
+    include: { lead: { select: { id: true, ref: true, contactName: true } } },
+    take: 200,
+  });
+  let sent = 0;
+  for (const f of due) {
+    await db.$transaction(async (tx) => {
+      // Claim it first so two workers never remind twice.
+      const claimed = await tx.followUp.updateMany({ where: { id: f.id, reminderSentAt: null, doneAt: null }, data: { reminderSentAt: now } });
+      if (claimed.count === 0) return;
+      await notifyStaff(tx, f.assigneeId, {
+        event: "followup.due",
+        subject: `Follow-up due · ${f.lead.ref}`,
+        body: `${f.title} — ${f.lead.contactName} (${f.lead.ref}), due ${dueLabel.format(f.dueAt)}.`,
+        leadId: f.lead.id,
+      });
+      sent++;
+    });
+  }
+  return { sent };
 }

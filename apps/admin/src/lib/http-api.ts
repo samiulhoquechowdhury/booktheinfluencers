@@ -2,7 +2,7 @@
 
 import { ApiError } from "@repo/mock/server";
 import { STAFF_ROLES, type StaffRole } from "@repo/mock/internal";
-import type { HeroSlideRecord, ImportResult, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
+import type { FollowUpRecord, HeroSlideRecord, ImportResult, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
 import type { mockApi, LeadDetail, LeadRow, StaffSession } from "./mock-api";
 
 // HTTP transport for the staff API (/v1/admin). Same interface as mock-api.ts, so the screens
@@ -269,6 +269,13 @@ export const httpApi: typeof mockApi = {
       const query = new URLSearchParams(Object.entries(filters).filter((e): e is [string, string] => Boolean(e[1])));
       return request<SignInsPage>(`/admin/sign-ins${query.size ? `?${query}` : ""}`);
     },
+  },
+
+  followUps: {
+    forLead: (leadId) => request<FollowUpRecord[]>(`/admin/leads/${id(leadId)}/follow-ups`),
+    mine: () => request<FollowUpRecord[]>("/admin/follow-ups/mine"),
+    create: (leadId, input) => post<FollowUpRecord>(`/admin/leads/${id(leadId)}/follow-ups`, input),
+    update: (followUpId, change) => request<FollowUpRecord>(`/admin/follow-ups/${id(followUpId)}`, { method: "PATCH", body: change }),
   },
 
   site: {
