@@ -1,20 +1,14 @@
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
-import { IMAGES } from "@repo/mock/catalogue/data";
+import crowd from "../../../public/images/footer.jpg";
 
 export function CtaBand() {
   return (
     <section id="contact" aria-labelledby="cta-heading" className="relative isolate overflow-hidden py-20 text-white sm:py-24">
-      <Image
-        src={`${IMAGES.cta}&w=1800&q=80`}
-        alt=""
-        fill
-        sizes="100vw"
-        className="-z-20 object-cover object-center"
-      />
-      {/* An even tint across the whole photo (not a dark left side), slightly deeper at the bottom. */}
-      <div aria-hidden className="absolute inset-0 -z-10 bg-ink/60" />
-      <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-ink/50 to-transparent" />
+      {/* Client's concert-crowd photo; anchored at the bottom so the crowd and stage lights stay in view. */}
+      <Image src={crowd} alt="" fill placeholder="blur" sizes="100vw" className="-z-20 object-cover object-bottom" />
+      {/* The photo is already dark: a light tint keeps the lights visible and the text readable. */}
+      <div aria-hidden className="absolute inset-0 -z-10 bg-ink/25" />
 
       <div className="shell flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
         <div className="max-w-xl">
