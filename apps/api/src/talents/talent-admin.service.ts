@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Prisma, ProfileStatus, VerificationStatus } from "@repo/db";
-import { publishBlockers as blockersFor, type RateCardInput, type RepInput, type TalentAdminDetail, type TalentInput } from "@repo/schemas";
+import { IMPORT_MAX_ROWS, checkImportRows, publishBlockers as blockersFor, type ImportResult, type RateCardInput, type RepInput, type TalentAdminDetail, type TalentInput } from "@repo/schemas";
+import { parseCsvRecords } from "@repo/utils";
 import { DomainError, forbidden, notFound } from "../common/errors";
 import type { AuthUser } from "../auth/guard";
 import { PrismaService } from "../prisma/prisma.service";
@@ -72,24 +73,67 @@ export class TalentAdminService {
   async create(user: AuthUser, input: TalentInput) {
     this.require(user, "TALENT_MANAGER");
     const categories = await this.categoryIds(input.categories);
-    const base = input.slug ?? slugify(input.stageName);
     return this.prisma.db.$transaction(async (tx) => {
-      let slug = base;
-      for (let n = 2; await tx.talent.findUnique({ where: { slug } }); n++) {
-        if (input.slug) throw new DomainError("DUPLICATE", "That web address is already taken", 409);
-        slug = `${base}-${n}`;
-      }
-      const talent = await tx.talent.create({
-        data: {
-          ...this.profileData(input),
-          slug,
-          status: "DRAFT",
-          categories: { create: categories.map((categoryId) => ({ categoryId })) },
-        },
-      });
-      await this.audit(tx, user, "talent.create", slug, `Created ${talent.stageName} as a draft`);
+      const slug = await this.createDraft(tx, input, categories);
+      await this.audit(tx, user, "talent.create", slug, `Created ${input.stageName} as a draft`);
       return { slug };
     });
+  }
+
+  /** Inserts a draft profile with a unique web address (adds -2, -3… unless one was asked for). */
+  private async createDraft(tx: Prisma.TransactionClient, input: TalentInput, categoryIds: string[]) {
+    const base = input.slug ?? slugify(input.stageName);
+    let slug = base;
+    for (let n = 2; await tx.talent.findUnique({ where: { slug } }); n++) {
+      if (input.slug) throw new DomainError("DUPLICATE", "That web address is already taken", 409);
+      slug = `${base}-${n}`;
+    }
+    await tx.talent.create({
+      data: { ...this.profileData(input), slug, status: "DRAFT", categories: { create: categoryIds.map((categoryId) => ({ categoryId })) } },
+    });
+    return slug;
+  }
+
+  /**
+   * Bulk import from a CSV (CRM → Talents → Import). Without `commit` it only checks the rows; with it, every
+   * valid row becomes a draft (plus its representative, KYC pending, and rate card) in one transaction.
+   */
+  async importCsv(user: AuthUser, csv: string, commit: boolean): Promise<ImportResult> {
+    this.require(user, "TALENT_MANAGER");
+    const { headers, records } = parseCsvRecords(csv);
+    if (records.length === 0) throw new DomainError("VALIDATION", "The file has no rows under the header");
+    if (records.length > IMPORT_MAX_ROWS) throw new DomainError("VALIDATION", `Import up to ${IMPORT_MAX_ROWS} artists at a time`);
+    const [categories, existing] = await Promise.all([
+      this.prisma.db.category.findMany({ select: { id: true, slug: true, name: true } }),
+      this.prisma.db.talent.findMany({ select: { stageName: true } }),
+    ]);
+    const rows = checkImportRows(records, headers, categories, new Set(existing.map((t) => t.stageName.trim().toLowerCase())));
+    const valid = rows.filter((r) => r.input);
+    if (!commit) return { rows: rows.map(({ line, stageName, errors }) => ({ line, stageName, errors })), valid: valid.length, created: 0 };
+    if (valid.length === 0) throw new DomainError("VALIDATION", "No rows are ready to import — fix the errors first");
+
+    const idBySlug = new Map(categories.map((c) => [c.slug, c.id]));
+    const slugs = await this.prisma.db.$transaction(
+      async (tx) => {
+        const created = new Map<number, string>();
+        for (const row of valid) {
+          const slug = await this.createDraft(tx, row.input!, row.input!.categories.map((c) => idBySlug.get(c)!));
+          const talent = await tx.talent.findUniqueOrThrow({ where: { slug }, select: { id: true } });
+          if (row.rep) {
+            const rep = await tx.representative.create({ data: { name: row.rep.name, agencyName: row.rep.agencyName || null, phone: row.rep.phone, email: row.rep.email || null, verification: "PENDING" } });
+            await tx.talentRep.create({ data: { talentId: talent.id, repId: rep.id } });
+          }
+          if (row.rateCard) {
+            await tx.rateCard.create({ data: { talentId: talent.id, sellingRatePaise: BigInt(row.rateCard.sellingRatePaise), minimumRatePaise: BigInt(row.rateCard.minimumRatePaise), payoutBps: row.rateCard.payoutBps } });
+          }
+          created.set(row.line, slug);
+        }
+        await this.audit(tx, user, "talent.import", `${created.size} profiles`, `Imported ${created.size} draft ${created.size === 1 ? "profile" : "profiles"} from CSV: ${valid.map((r) => r.stageName).join(", ").slice(0, 400)}`);
+        return created;
+      },
+      { timeout: 60_000 },
+    );
+    return { rows: rows.map(({ line, stageName, errors }) => ({ line, stageName, errors, slug: slugs.get(line) })), valid: valid.length, created: slugs.size };
   }
 
   async update(user: AuthUser, slug: string, input: TalentInput) {

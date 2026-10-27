@@ -6,6 +6,7 @@ import { CurrentUser, Roles, STAFF_ROLES, type AuthUser } from "../auth/guard";
 import { TalentAdminService } from "./talent-admin.service";
 
 const Status = z.object({ status: ProfileStatusSchema });
+const Import = z.object({ csv: z.string().min(1, "Choose a CSV file").max(1_000_000, "Keep the file under 1 MB"), commit: z.boolean().default(false) });
 const SelfEdit = z.object({ selfEdit: z.boolean() });
 const Verification = z.object({ verification: VerificationStatusSchema });
 
@@ -23,6 +24,14 @@ export class TalentAdminController {
   @Post("talents")
   create(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     return this.talents.create(user, parse(TalentInputSchema, body));
+  }
+
+  /** Bulk CSV import: check first (commit: false), then import the valid rows as drafts. */
+  @Post("talents/import")
+  @HttpCode(200)
+  importCsv(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const { csv, commit } = parse(Import, body);
+    return this.talents.importCsv(user, csv, commit);
   }
 
   @Put("talents/:slug")

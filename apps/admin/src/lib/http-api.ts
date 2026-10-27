@@ -2,7 +2,7 @@
 
 import { ApiError } from "@repo/mock/server";
 import { STAFF_ROLES, type StaffRole } from "@repo/mock/internal";
-import type { HeroSlideRecord, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
+import type { HeroSlideRecord, ImportResult, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
 import type { mockApi, LeadDetail, LeadRow, StaffSession } from "./mock-api";
 
 // HTTP transport for the staff API (/v1/admin). Same interface as mock-api.ts, so the screens
@@ -235,6 +235,7 @@ export const httpApi: typeof mockApi = {
   talents: {
     list: async () => as(await request("/admin/talents")),
     get: (slug) => request<TalentAdminDetail>(`/admin/talents/${id(slug)}`),
+    importCsv: (csv, commit) => post<ImportResult>("/admin/talents/import", { csv, commit }),
     create: (input) => post<{ slug: string }>("/admin/talents", input),
     update: (slug, input) => request(`/admin/talents/${id(slug)}`, { method: "PUT", body: input }),
     setStatus: (slug, status) => post(`/admin/talents/${id(slug)}/status`, { status }),

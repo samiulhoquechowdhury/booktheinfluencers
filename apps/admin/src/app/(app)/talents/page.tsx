@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BadgeCheck, Plus } from "lucide-react";
+import { BadgeCheck, Plus, Upload } from "lucide-react";
 import type { ProfileStatus } from "@repo/schemas";
 import { api, can, errorMessage } from "@/lib/api";
 import { PROFILE_STATUS_LABELS, inr, inrCompact, percent, profileTone } from "@/lib/format";
@@ -27,10 +27,16 @@ export default function TalentsPage() {
         description="Roster with internal rate cards. Public fee bands are shown to customers; rate cards never are."
         actions={
           staff && can(staff, "TALENT_MANAGER") && (
-            <Link href="/talents/new" className="btn btn-dark btn-sm">
-              <Plus aria-hidden />
-              New talent
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/talents/import" className="btn btn-outline btn-sm">
+                <Upload aria-hidden />
+                Import CSV
+              </Link>
+              <Link href="/talents/new" className="btn btn-dark btn-sm">
+                <Plus aria-hidden />
+                New talent
+              </Link>
+            </div>
           )
         }
       />

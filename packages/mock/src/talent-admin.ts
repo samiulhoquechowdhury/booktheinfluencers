@@ -1,4 +1,7 @@
 import {
+  IMPORT_MAX_ROWS,
+  checkImportRows,
+  type ImportResult,
   RateCardSchema,
   RepSchema,
   TalentInputSchema,
@@ -7,7 +10,8 @@ import {
   type TalentAdminDetail,
   type VerificationStatus,
 } from "@repo/schemas";
-import { TALENTS } from "./catalogue/data";
+import { parseCsvRecords } from "@repo/utils";
+import { CATEGORIES, TALENTS } from "./catalogue/data";
 import { internalFor, minimumRateFor, type StaffRole, type StaffUser } from "./internal";
 import { ApiError, newId, nowIso } from "./server";
 import { audit, can } from "./staff";
@@ -155,4 +159,31 @@ export function setRepVerification(db: MockDb, actor: StaffUser, repId: string, 
     audit(db, actor, "talent.status", "Talent", record.slug, "PUBLISHED → HIDDEN (no verified representative)");
   }
   audit(db, actor, "talent.repVerification", "Talent", record.slug, `${rep.name} → ${verification}`);
+}
+
+/** Bulk CSV import, as apps/api: check every row, then (with `commit`) add the valid ones as drafts. */
+export function importTalentCsv(db: MockDb, actor: StaffUser, csv: string, commit: boolean): ImportResult {
+  requireRole(actor, "TALENT_MANAGER");
+  const { headers, records } = parseCsvRecords(csv);
+  if (records.length === 0) throw new ApiError("VALIDATION", "The file has no rows under the header");
+  if (records.length > IMPORT_MAX_ROWS) throw new ApiError("VALIDATION", `Import up to ${IMPORT_MAX_ROWS} artists at a time`);
+  const existing = new Set(allTalentRecords(db).map((t) => t.stageName.trim().toLowerCase()));
+  const rows = checkImportRows(records, headers, CATEGORIES.map((c) => ({ slug: c.slug, name: c.name })), existing);
+  const valid = rows.filter((r) => r.input);
+  const summary = ({ line, stageName, errors }: (typeof rows)[number]) => ({ line, stageName, errors });
+  if (!commit) return { rows: rows.map(summary), valid: valid.length, created: 0 };
+  if (valid.length === 0) throw new ApiError("VALIDATION", "No rows are ready to import — fix the errors first");
+
+  const created = new Map<number, string>();
+  for (const row of valid) {
+    const { slug: _, ...input } = row.input!;
+    const base = slugify(input.stageName);
+    let slug = base;
+    for (let n = 2; talentRecord(db, slug); n++) slug = `${base}-${n}`;
+    const reps = row.rep ? [{ id: newId("rep"), name: row.rep.name, agencyName: row.rep.agencyName || null, phone: row.rep.phone, email: row.rep.email || null, verification: "PENDING" as const }] : [];
+    db.talentRecords[slug] = { ...input, slug, status: "DRAFT", rateCard: row.rateCard ?? null, reps, createdAt: nowIso() };
+    created.set(row.line, slug);
+  }
+  audit(db, actor, "talent.import", "Talent", `${created.size} profiles`, `Imported ${created.size} draft ${created.size === 1 ? "profile" : "profiles"} from CSV: ${valid.map((r) => r.stageName).join(", ").slice(0, 400)}`);
+  return { rows: rows.map((r) => ({ ...summary(r), slug: created.get(r.line) })), valid: valid.length, created: created.size };
 }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { STAFF_USERS } from "./internal";
 import { buildSeed } from "./seed";
 import { draftQuote } from "./staff";
-import { addRep, allTalentRecords, createTalent, setRateCard, setRepVerification, setTalentStatus, talentDetail, updateTalent } from "./talent-admin";
+import { addRep, allTalentRecords, createTalent, importTalentCsv, setRateCard, setRepVerification, setTalentStatus, talentDetail, updateTalent } from "./talent-admin";
 import type { MockDb } from "./types";
 
 const staff = (role: string) => STAFF_USERS.find((s) => s.roles.includes(role as never))!;
@@ -66,5 +66,23 @@ describe("mock talent management", () => {
     setRateCard(db, accounts, booking.talentSlug, { sellingRatePaise: "50000000", minimumRatePaise: "40000000", payoutBps: 8000 });
     expect(draftQuote(structuredClone(db), booking.id).rate.minimumRatePaise).toBe("40000000");
     expect(talentDetail(db, staff("OPS"), booking.talentSlug).rateCard).toBeNull();
+  });
+});
+
+describe("mock CSV import", () => {
+  const csv = [
+    "stage_name,headline,bio,base_city,categories,languages,photo_url,rep_name,rep_phone",
+    "Mock Import Act,Live act,A versatile live act for weddings and corporate nights.,Goa,Singers,Hindi,https://images.example.com/a.jpg,Asha,9876500001",
+    "Aanya Kapoor,Dup,This artist is already on the seeded roster so it's refused.,Mumbai,Singers,Hindi,https://images.example.com/b.jpg,,",
+  ].join("\n");
+
+  it("checks first, then imports valid rows as drafts", () => {
+    const check = importTalentCsv(db, manager, csv, false);
+    expect(check.valid).toBe(1);
+    expect(check.rows[1]!.errors).toContain("stage_name: already on the roster");
+    const done = importTalentCsv(db, manager, csv, true);
+    expect(done.created).toBe(1);
+    expect(talentDetail(db, manager, done.rows[0]!.slug!)).toMatchObject({ status: "DRAFT", baseCity: "Goa", reps: [{ name: "Asha", verification: "PENDING" }] });
+    expect(() => importTalentCsv(db, sales, csv, true)).toThrow(/role/);
   });
 });

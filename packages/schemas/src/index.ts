@@ -6,3 +6,4 @@ export * from "./booking";
 export * from "./talent-admin";
 export * from "./staff-admin";
 export * from "./site";
+export * from "./talent-import";

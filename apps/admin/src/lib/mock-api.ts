@@ -56,7 +56,7 @@ import {
   type QuoteDraft,
 } from "@repo/mock/staff";
 import { loadDb, mutate, readStaffId, writeStaffId } from "@repo/mock/store";
-import { addRep, allTalentRecords, createTalent, setRateCard, setRepVerification, setTalentStatus, talentDetail, updateTalent } from "@repo/mock/talent-admin";
+import { addRep, allTalentRecords, createTalent, importTalentCsv, setRateCard, setRepVerification, setTalentStatus, talentDetail, updateTalent } from "@repo/mock/talent-admin";
 import type { HeroSlideInput, StaffCreateInput, StaffUpdateInput, SuperAdminTransferInput, ProfileStatus, RateCardInput, RepInput, TalentInput, VerificationStatus } from "@repo/schemas";
 import type { LeadRec, MockDb, TalentApplicationRec } from "@repo/mock/types";
 
@@ -295,6 +295,7 @@ export const mockApi = {
         }));
       }),
     get: (slug: string) => call(() => talentDetail(loadDb(), actor(), slug)),
+    importCsv: (csv: string, commit: boolean) => call(() => (commit ? mutate((db) => importTalentCsv(db, actor(), csv, true)) : importTalentCsv(loadDb(), actor(), csv, false))),
     create: (input: TalentInput) => call(() => mutate((db) => createTalent(db, actor(), input))),
     update: (slug: string, input: TalentInput) => call(() => mutate((db) => updateTalent(db, actor(), slug, input))),
     setStatus: (slug: string, status: ProfileStatus) => call(() => mutate((db) => setTalentStatus(db, actor(), slug, status))),

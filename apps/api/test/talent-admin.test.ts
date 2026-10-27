@@ -105,3 +105,51 @@ describe("talent management (ADM-1…5)", () => {
     expect(seen.body.rateCard.sellingRatePaise).toBe("25000000");
   });
 });
+
+describe("bulk CSV import", () => {
+  const header = "stage_name,headline,bio,base_city,categories,languages,event_types,tier,representation,fee_from_inr,fee_to_inr,photo_url,rep_name,rep_phone,rep_agency,standard_rate_inr,minimum_rate_inr,payout_percent";
+  const name = (n: string) => `CSV ${n} ${Date.now()}`;
+
+  it("checks every row, then imports the valid ones as drafts with rep and rate card", async () => {
+    const good = name("Good");
+    const csv = [
+      header,
+      `"${good}",Live band,"A versatile live act for weddings, sangeets and corporate nights.",Pune,Singers; DJs,Hindi; English,Wedding,premium,agency,"1,50,000",300000,https://images.example.com/a.jpg,Asha Rao,9876500001,Spotlight,250000,200000,80`,
+      `${name("Bad")},x,short,Pune,Jugglers,,Wedding,gold,agency,500,100,http://insecure.example/a.jpg,,,,,,`,
+      `"${good}",Again,"Same artist twice in one file should be caught here.",Pune,Singers,Hindi,,,,,,https://images.example.com/b.jpg,,,,,,`,
+    ].join("\n");
+
+    await http().post("/v1/admin/talents/import").set(as("sales")).send({ csv }).expect(403);
+    const check = await http().post("/v1/admin/talents/import").set(as("talent")).send({ csv }).expect(200);
+    expect(check.body.valid).toBe(1);
+    expect(check.body.created).toBe(0);
+    const [ok, bad, dup] = check.body.rows;
+    expect(ok).toMatchObject({ line: 2, stageName: good, errors: [] });
+    expect(bad.errors.join(" | ")).toMatch(/categories: “Jugglers” isn't a category/);
+    expect(bad.errors.join(" | ")).toMatch(/tier: use standard or premium/);
+    expect(bad.errors.join(" | ")).toMatch(/photo_url: Use an https image link/);
+    expect(bad.errors.join(" | ")).toMatch(/fee_to_inr: The top of the band can't be below the bottom/);
+    expect(dup.errors).toContain("stage_name: also on line 2 of this file");
+    expect(await db.talent.count({ where: { stageName: good } })).toBe(0);
+
+    const done = await http().post("/v1/admin/talents/import").set(as("talent")).send({ csv, commit: true }).expect(200);
+    expect(done.body.created).toBe(1);
+    const slug = done.body.rows[0].slug as string;
+    const talent = await db.talent.findUniqueOrThrow({ where: { slug }, include: { rateCards: true, reps: { include: { rep: true } }, categories: { include: { category: true } } } });
+    expect(talent).toMatchObject({ status: "DRAFT", tier: "PREMIUM", feeBandMinPaise: 15_000_000n, feeBandMaxPaise: 30_000_000n });
+    expect(talent.categories.map((c) => c.category.slug).sort()).toEqual(["djs", "singers"]);
+    expect(talent.reps[0]!.rep).toMatchObject({ name: "Asha Rao", agencyName: "Spotlight", verification: "PENDING" });
+    expect(talent.rateCards[0]).toMatchObject({ sellingRatePaise: 25_000_000n, minimumRatePaise: 20_000_000n, payoutBps: 8000 });
+
+    // Importing the same file again: the artist is already on the roster.
+    const again = await http().post("/v1/admin/talents/import").set(as("talent")).send({ csv }).expect(200);
+    expect(again.body.rows[0].errors).toContain("stage_name: already on the roster");
+    expect(await db.auditLog.count({ where: { action: "talent.import", summary: { contains: good } } })).toBe(1);
+  });
+
+  it("reports a missing required column on every row", async () => {
+    const res = await http().post("/v1/admin/talents/import").set(as("talent")).send({ csv: "stage_name,headline\nSolo,Singer" }).expect(200);
+    expect(res.body.rows[0].errors).toEqual(expect.arrayContaining(["photo_url: column missing from the file", "bio: column missing from the file"]));
+    await http().post("/v1/admin/talents/import").set(as("talent")).send({ csv: "stage_name,headline\nSolo,Singer", commit: true }).expect(400);
+  });
+});
