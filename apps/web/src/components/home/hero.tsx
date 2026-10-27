@@ -1,5 +1,5 @@
 import { FilePenLine, Lock, ShieldCheck } from "lucide-react";
-import heroImage from "../../../public/images/hero.jpg";
+import heroImage from "../../../public/images/hero-main.jpg";
 import { heroSlides } from "@/lib/catalogue";
 import { HeroCarousel } from "./hero-carousel";
 

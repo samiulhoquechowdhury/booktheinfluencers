@@ -8,7 +8,8 @@ import { loadDb, onExternalChange } from "@repo/mock/store";
 import { DEMO_MODE } from "@/lib/api/client";
 import { ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 
-const BUNDLED_PATH = "/images/hero.jpg";
+/** The main slide's photo, imported statically for its blur placeholder (it's the first thing people see). */
+const BUNDLED_PATH = "/images/hero-main.jpg";
 
 /** Demo mode: slides edited in the CRM live in this browser's mock store, so read them from there. */
 const subscribeStore = (onChange: () => void) => onExternalChange(onChange);

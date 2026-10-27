@@ -60,6 +60,23 @@ function upgrade(db: MockDb): MockDb {
       if (!db.heroSlides.some((s) => s.id === slide.id)) db.heroSlides.push({ ...structuredClone(slide), position: top + 1 + i });
     db.heroDefaultsVersion = 2;
   }
+  if ((db.heroDefaultsVersion ?? 1) < 3) {
+    // v3: the client's main photo on the main slide (unless changed), the old stage photo as its own slide.
+    const main = db.heroSlides.find((s) => s.id === "hero_default");
+    const fresh = DEFAULT_HERO_SLIDES.find((s) => s.id === "hero_default")!;
+    if (main && !main.imageId && main.imagePath === "/images/hero.jpg") Object.assign(main, { imagePath: fresh.imagePath, imageAlt: fresh.imageAlt });
+    const stage = DEFAULT_HERO_SLIDES.find((s) => s.id === "hero_stage")!;
+    if (!db.heroSlides.some((s) => s.id === stage.id)) db.heroSlides.push({ ...structuredClone(stage), position: Math.max(-1, ...db.heroSlides.map((s) => s.position)) + 1 });
+    db.heroDefaultsVersion = 3;
+  }
+  if ((db.heroDefaultsVersion ?? 1) < 4) {
+    // v4: the client removed hero-2.jpg and hero-3.jpg, so their built-in slides go (uploaded photos stay).
+    db.heroSlides = db.heroSlides
+      .filter((s) => s.imageId || !["/images/hero-2.jpg", "/images/hero-3.jpg"].includes(s.imagePath ?? ""))
+      .toSorted((a, b) => a.position - b.position)
+      .map((s, i) => ({ ...s, position: i }));
+    db.heroDefaultsVersion = 4;
+  }
   db.media ??= {};
   db.loginEvents ??= [];
   return db;

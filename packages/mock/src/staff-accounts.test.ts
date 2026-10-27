@@ -69,10 +69,9 @@ describe("mock hero", () => {
     expect(() => createHero(db, admin, slide)).toThrow(/photo/);
     const media = uploadMedia(db, admin, PIXEL, 1672, 941);
     const created = createHero(db, admin, { ...slide, imageId: media.id });
-    expect(publicHero(db).map((s) => s.title)).toEqual(["Book the talent.", "Creators who move", "From the big screen", "From the big screen"]);
-    expect(publicHero(db)[1]!.textPosition).toBe("right");
+    expect(publicHero(db).map((s) => s.title)).toEqual(["Book the talent.", "Singers, DJs and comedians", "From the big screen"]);
     updateHero(db, admin, created.id, { ...slide, imageId: media.id, active: false });
-    expect(publicHero(db)).toHaveLength(3);
+    expect(publicHero(db)).toHaveLength(2);
     // Hide all but one built-in slide; that last one can't be hidden or deleted.
     const [first, ...rest] = listHero(db, admin).filter((s) => s.active);
     for (const s of rest) deleteHero(db, admin, s.id);
