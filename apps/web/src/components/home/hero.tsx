@@ -2,6 +2,7 @@ import { FilePenLine, Lock, ShieldCheck } from "lucide-react";
 import heroImage from "../../../public/images/hero-main.jpg";
 import { heroSlides } from "@/lib/catalogue";
 import { HeroCarousel } from "./hero-carousel";
+import { SearchBar } from "./search-bar";
 
 const TRUST_POINTS = [
   { icon: ShieldCheck, label: "Verified representatives" },
@@ -13,8 +14,9 @@ const TRUST_POINTS = [
 export async function Hero() {
   const slides = await heroSlides();
   return (
-    // The search form overlaps the bottom of the photo (components/home/search-bar.tsx).
-    <section className="relative isolate overflow-hidden bg-ink text-white">
+    // The photo runs behind the search form and stops at its exact middle: the white panel below covers the
+    // bottom half of the form's row, whatever height the form has (it's much taller on phones).
+    <section className="relative isolate bg-ink text-white">
       <HeroCarousel slides={slides} bundled={heroImage}>
         <ul className="mt-8 flex flex-wrap gap-2 [text-shadow:none] xl:mt-10">
           {TRUST_POINTS.map(({ icon: Icon, label }) => (
@@ -27,6 +29,10 @@ export async function Hero() {
           ))}
         </ul>
       </HeroCarousel>
+      <div className="relative">
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-background" />
+        <SearchBar />
+      </div>
     </section>
   );
 }

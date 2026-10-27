@@ -89,12 +89,12 @@ export function HeroCarousel({ slides: served, bundled, children }: { slides: Pu
         <div aria-hidden className="absolute inset-0 bg-ink/40" />
         <div aria-hidden className={`absolute inset-0 bg-gradient-to-r from-ink/70 via-ink/20 to-transparent transition-opacity duration-1000 ${textRight ? "lg:opacity-0" : ""}`} />
         <div aria-hidden className={`absolute inset-0 hidden bg-gradient-to-l from-ink/70 via-ink/20 to-transparent transition-opacity duration-1000 lg:block ${textRight ? "opacity-100" : "opacity-0"}`} />
-        <div aria-hidden className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-ink via-ink/60 to-transparent" />
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-ink/80 via-ink/40 to-transparent" />
       </div>
 
       {/* As tall as a 16:9 photo at full width (capped), so the picture shows whole on desktop. */}
-      <div className="flex min-h-[600px] items-center sm:min-h-[640px] lg:min-h-[min(56.25vw,860px)]">
-        <div className="shell w-full pb-32 pt-14 lg:pt-20">
+      <div className="flex min-h-[520px] items-center sm:min-h-[580px] lg:min-h-[min(50vw,780px)]">
+        <div className="shell w-full pb-12 pt-14 lg:pb-16 lg:pt-20">
           <div className="[text-shadow:0_2px_18px_rgb(0_0_0/0.35)]">
             {/* Every slide's text sits in the same grid cell, so the block is as tall as the longest one. */}
             <div className="grid" aria-live={stopped || hovered ? "polite" : "off"}>

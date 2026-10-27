@@ -6,13 +6,11 @@ import { ForTalent } from "@/components/home/for-talent";
 import { Hero } from "@/components/home/hero";
 import { Occasions } from "@/components/home/occasions";
 import { PromiseSection } from "@/components/home/promise-section";
-import { SearchBar } from "@/components/home/search-bar";
 
 export default function HomePage() {
   return (
     <>
       <Hero />
-      <SearchBar />
       <CategoryStrip />
       <FeaturedTalent />
       <PromiseSection />

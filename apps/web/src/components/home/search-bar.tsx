@@ -18,7 +18,7 @@ export function SearchBar() {
   const today = useSyncExternalStore(noop, () => toIstDateKey(new Date()), () => undefined);
 
   return (
-    <div id="search" className="shell relative z-10 -mt-20 scroll-mt-28 sm:-mt-16">
+    <div id="search" className="shell relative z-10 scroll-mt-28 text-ink">
       <form
         action="/talent"
         role="search"
@@ -63,7 +63,7 @@ function Field({ icon: Icon, label, divider = false, className = "", children }:
     <label
       className={`group relative flex cursor-text items-center gap-2.5 bg-white px-3.5 py-3 sm:gap-3 sm:px-4 transition-colors hover:bg-cream-soft focus-within:bg-cream-soft lg:rounded-xl lg:py-2.5 ${divider ? "lg:before:absolute lg:before:inset-y-3 lg:before:left-0 lg:before:w-px lg:before:bg-line" : ""} ${className}`}
     >
-      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-cream sm:size-9 text-gold-deep transition-colors group-focus-within:bg-gold group-focus-within:text-ink">
+      <span className="hidden size-9 shrink-0 place-items-center rounded-full bg-cream sm:grid text-gold-deep transition-colors group-focus-within:bg-gold group-focus-within:text-ink">
         <Icon className="size-4" aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
