@@ -16,6 +16,7 @@
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "@repo/db": "workspace:*",
+    "@repo/pdf": "workspace:*",
     "@repo/schemas": "workspace:*",
     "@repo/utils": "workspace:*",
     "cookie-parser": "^1.4.7",

@@ -9,9 +9,10 @@ import { inr } from "@/lib/format";
 import { BRAND_NAME } from "@/lib/site";
 import { RequireSession } from "@/components/auth/require-session";
 import { ErrorState, Spinner } from "@/components/ui/feedback";
+import { PdfButton } from "./pdf-button";
 import { QuoteTable, percent } from "./quote-panel";
 
-function Sheet({ leadId, title, children }: { leadId: string; title: string; children: React.ReactNode }) {
+function Sheet({ leadId, title, pdf, children }: { leadId: string; title: string; pdf?: { kind: "quote" | "contract"; id: string }; children: React.ReactNode }) {
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 print:hidden">
@@ -19,10 +20,13 @@ function Sheet({ leadId, title, children }: { leadId: string; title: string; chi
           <ArrowLeft className="size-4" aria-hidden />
           Back to booking
         </Link>
-        <button type="button" onClick={() => window.print()} className="btn btn-dark btn-sm">
-          <Printer aria-hidden />
-          Print / save as PDF
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {pdf && <PdfButton kind={pdf.kind} id={pdf.id} className="btn btn-dark btn-sm" />}
+          <button type="button" onClick={() => window.print()} className={pdf ? "btn btn-outline btn-sm" : "btn btn-dark btn-sm"}>
+            <Printer aria-hidden />
+            {pdf ? "Print" : "Print / save as PDF"}
+          </button>
+        </div>
       </div>
       <article className="mx-auto max-w-3xl rounded-card border border-line bg-white p-8 sm:p-12 print:border-0 print:p-0">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-6">
@@ -55,7 +59,7 @@ function QuoteSheet({ leadId, quoteId }: { leadId: string; quoteId: string }) {
   if (!booking || !quote) return <ErrorState message="We couldn't find that quote" />;
 
   return (
-    <Sheet leadId={leadId} title={`Quote v${quote.version}`}>
+    <Sheet leadId={leadId} title={`Quote v${quote.version}`} pdf={{ kind: "quote", id: quote.id }}>
       <dl className="grid gap-4 py-6 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-xs uppercase tracking-wider text-muted">Prepared for</dt>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PdfButton } from "./pdf-button";
 import { ArrowLeft, FileText, MessageCircle, Receipt } from "lucide-react";
 import type { CustomerLead } from "@repo/schemas";
 import { formatDateTime, formatDateWithWeekday } from "@repo/utils";
@@ -120,9 +121,10 @@ function Documents({ lead }: { lead: CustomerLead }) {
         href: `/account/bookings/${lead.id}/quote/${q.id}`,
         icon: <FileText className="size-4" aria-hidden />,
         label: `Quote v${q.version} — ${booking.talent.stageName}`,
+        pdf: { kind: "quote" as const, id: q.id },
       })),
     ...(booking.contract?.status === "SIGNED"
-      ? [{ href: `/esign/${booking.contract.id}`, icon: <FileText className="size-4" aria-hidden />, label: `Signed contract — ${booking.talent.stageName}` }]
+      ? [{ href: `/esign/${booking.contract.id}`, icon: <FileText className="size-4" aria-hidden />, label: `Signed contract — ${booking.talent.stageName}`, pdf: { kind: "contract" as const, id: booking.contract.id } }]
       : []),
     ...booking.milestones
       .filter((m) => m.status === "PAID")
@@ -140,11 +142,14 @@ function Documents({ lead }: { lead: CustomerLead }) {
       ) : (
         <ul className="space-y-1">
           {docs.map((doc) => (
-            <li key={doc.href}>
-              <Link href={doc.href} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink hover:bg-cream-soft">
+            <li key={doc.href} className="flex items-center gap-1">
+              <Link href={doc.href} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink hover:bg-cream-soft">
                 <span className="text-gold-deep">{doc.icon}</span>
-                {doc.label}
+                <span className="truncate">{doc.label}</span>
               </Link>
+              {"pdf" in doc && doc.pdf && (
+                <PdfButton kind={doc.pdf.kind} id={doc.pdf.id} label="PDF" className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gold-deep hover:bg-cream-soft [&_svg]:size-3.5" />
+              )}
             </li>
           ))}
         </ul>

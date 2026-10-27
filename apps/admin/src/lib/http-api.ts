@@ -3,6 +3,7 @@
 import { ApiError } from "@repo/mock/server";
 import { STAFF_ROLES, type StaffRole } from "@repo/mock/internal";
 import type { FollowUpRecord, HeroSlideRecord, ImportResult, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
+import { saveBlob } from "./download";
 import type { mockApi, LeadDetail, LeadRow, StaffSession } from "./mock-api";
 
 // HTTP transport for the staff API (/v1/admin). Same interface as mock-api.ts, so the screens
@@ -62,6 +63,22 @@ async function request<T>(path: string, init: { method?: string; body?: unknown;
 
 const post = <T = void>(path: string, body?: unknown) => request<T>(path, { method: "POST", body });
 const id = (value: string) => encodeURIComponent(value);
+
+/** Signed-in file download: the file name comes from the API's Content-Disposition header. */
+async function download(path: string, retried = false): Promise<void> {
+  if (!accessToken && !retried) await refresh();
+  const res = await fetch(`${BASE}${path}`, { credentials: "include", headers: accessToken ? { authorization: `Bearer ${accessToken}` } : {} });
+  if (res.status === 401 && !retried) {
+    accessToken = null;
+    if (await refresh()) return download(path, true);
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(data?.error?.code ?? "HTTP_ERROR", data?.error?.message ?? "Couldn't download that file. Please try again.");
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "document.pdf";
+  saveBlob(await res.blob(), name);
+}
 
 /** Image uploads go as raw bytes with their own content type (the API's JSON parser skips them). */
 async function upload(path: string, file: Blob, retried = false): Promise<{ id: string; url: string; width: number; height: number }> {
@@ -269,6 +286,11 @@ export const httpApi: typeof mockApi = {
       const query = new URLSearchParams(Object.entries(filters).filter((e): e is [string, string] => Boolean(e[1])));
       return request<SignInsPage>(`/admin/sign-ins${query.size ? `?${query}` : ""}`);
     },
+  },
+
+  documents: {
+    quotePdf: (quoteId) => download(`/admin/quotes/${id(quoteId)}/pdf`),
+    contractPdf: (contractId) => download(`/admin/contracts/${id(contractId)}/pdf`),
   },
 
   followUps: {

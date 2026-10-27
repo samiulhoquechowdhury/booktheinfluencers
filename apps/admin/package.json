@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@repo/mock": "workspace:*",
+    "@repo/pdf": "workspace:*",
     "@repo/schemas": "workspace:*",
     "@repo/ui": "workspace:*",
     "@repo/utils": "workspace:*",

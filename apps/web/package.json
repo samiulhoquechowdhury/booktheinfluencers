@@ -15,6 +15,7 @@
     "@fontsource-variable/playfair-display": "^5.3.0",
     "@hookform/resolvers": "^6.0.0",
     "@repo/mock": "workspace:*",
+    "@repo/pdf": "workspace:*",
     "@repo/schemas": "workspace:*",
     "@repo/ui": "workspace:*",
     "@repo/utils": "workspace:*",

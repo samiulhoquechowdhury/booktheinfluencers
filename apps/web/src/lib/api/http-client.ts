@@ -10,6 +10,7 @@ import type {
   TalentSummary,
 } from "@repo/schemas";
 import { ApiError } from "@repo/mock/server";
+import { saveBlob } from "@/lib/download";
 import type { mockApi } from "./mock-client";
 import type { Message, Session } from "./types";
 
@@ -73,6 +74,22 @@ function refresh() {
 
 const json = <T>(path: string, body?: unknown, method = "POST") => request<T>(path, { method, body });
 
+/** Signed-in file download: the file name comes from the API's Content-Disposition header. */
+async function download(path: string, retried = false): Promise<void> {
+  if (!accessToken && !retried) await refresh();
+  const res = await fetch(`${BASE}${path}`, { credentials: "include", headers: accessToken ? { authorization: `Bearer ${accessToken}` } : {} });
+  if (res.status === 401 && !retried) {
+    accessToken = null;
+    if (await refresh()) return download(path, true);
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(data?.error?.code ?? "HTTP_ERROR", data?.error?.message ?? "Couldn't download that file. Please try again.");
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "document.pdf";
+  saveBlob(await res.blob(), name);
+}
+
 export const httpApi: typeof mockApi = {
   auth: {
     getSession: async () => (accessToken ? toSession(await request<ApiUser>("/auth/me")) : refresh()),
@@ -100,6 +117,11 @@ export const httpApi: typeof mockApi = {
     requestChanges: (quoteId, note) => json<void>(`/quotes/${encodeURIComponent(quoteId)}/request-changes`, { note }),
     requestCancellation: (bookingId, reason) => json<void>(`/bookings/${encodeURIComponent(bookingId)}/cancellation-request`, { reason }),
     startCheckout: (milestoneId) => json<{ checkoutUrl: string }>(`/milestones/${encodeURIComponent(milestoneId)}/checkout`),
+  },
+
+  documents: {
+    quotePdf: (quoteId) => download(`/quotes/${encodeURIComponent(quoteId)}/pdf`),
+    contractPdf: (contractId) => download(`/contracts/${encodeURIComponent(contractId)}/pdf`),
   },
 
   providers: {

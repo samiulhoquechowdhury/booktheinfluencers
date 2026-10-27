@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@repo/pdf": "workspace:*",
     "@repo/schemas": "workspace:*",
     "@repo/utils": "workspace:*"
   },

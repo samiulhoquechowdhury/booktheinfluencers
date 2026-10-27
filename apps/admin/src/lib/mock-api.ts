@@ -5,6 +5,8 @@
 import { allowedNextStages, type LeadStage } from "@repo/utils";
 import { TALENTS } from "@repo/mock/catalogue/data";
 import { internalFor, type StaffUser } from "@repo/mock/internal";
+import { contractPdfData, quotePdfData } from "@repo/mock/documents";
+import { pdfFonts, saveBlob } from "./download";
 import { createFollowUp, followUpsFor, myFollowUps, nextFollowUpAt, updateFollowUp } from "@repo/mock/follow-ups";
 import { signIns } from "@repo/mock/login-events";
 import { createHero, deleteHero, listHero, reorderHero, updateHero, uploadMedia } from "@repo/mock/site";
@@ -177,6 +179,20 @@ export const mockApi = {
     resetMfa: (id: string) => call(() => mutate((db) => resetStaffMfa(db, actor(), id))),
     transfer: (id: string, input: SuperAdminTransferInput) => call(() => mutate((db) => transferSuperAdmin(db, actor(), id, input))),
     signIns: (filters: SignInFilters = {}) => call(() => signIns(loadDb(), actor(), filters)),
+  },
+
+  documents: {
+    /** Demo mode: built in the browser from the mock store, with the same generator as the API. */
+    quotePdf: async (quoteId: string) => {
+      const data = await call(() => (actor(), quotePdfData(loadDb(), quoteId)));
+      const { buildQuotePdf, pdfFileName } = await import("@repo/pdf");
+      saveBlob(new Blob([(await buildQuotePdf(data, await pdfFonts())) as BlobPart], { type: "application/pdf" }), pdfFileName("quote", data.ref, data.version));
+    },
+    contractPdf: async (contractId: string) => {
+      const data = await call(() => (actor(), contractPdfData(loadDb(), contractId)));
+      const { buildContractPdf, pdfFileName } = await import("@repo/pdf");
+      saveBlob(new Blob([(await buildContractPdf(data, await pdfFonts())) as BlobPart], { type: "application/pdf" }), pdfFileName("contract", data.ref));
+    },
   },
 
   followUps: {

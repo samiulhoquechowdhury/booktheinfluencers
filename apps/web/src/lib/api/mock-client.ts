@@ -26,7 +26,9 @@ import {
   type DemoAction,
 } from "@repo/mock/server";
 import { toCustomerLead, toTalentBooking } from "@repo/mock/serializers";
+import { contractPdfData, quotePdfData } from "@repo/mock/documents";
 import { recordLogin } from "@repo/mock/login-events";
+import { pdfFonts, saveBlob } from "@/lib/download";
 import { loadDb, mutate, readSessionUserId, resetDb, writeSessionUserId } from "@repo/mock/store";
 import type { MessageRec, MockDb, UserRec } from "@repo/mock/types";
 import { getTalent, getTalentSummaries, searchTalents } from "@repo/mock/catalogue/query";
@@ -195,6 +197,27 @@ export const mockApi = {
   },
 
   /** Simulated third-party screens. In production these are the gateway's and e-sign vendor's own pages. */
+  documents: {
+    /** Demo mode: the PDF is built in the browser from the mock store, with the same generator as the API. */
+    quotePdf: async (quoteId: string) => {
+      const data = await call(() => {
+        const db = loadDb();
+        return quotePdfData(db, quoteId, currentUser(db).id);
+      });
+      // Loaded on demand so pdf-lib isn't in every visitor's bundle.
+      const { buildQuotePdf, pdfFileName } = await import("@repo/pdf");
+      saveBlob(new Blob([(await buildQuotePdf(data, await pdfFonts())) as BlobPart], { type: "application/pdf" }), pdfFileName("quote", data.ref, data.version));
+    },
+    contractPdf: async (contractId: string) => {
+      const data = await call(() => {
+        const db = loadDb();
+        return contractPdfData(db, contractId, currentUser(db).id);
+      });
+      const { buildContractPdf, pdfFileName } = await import("@repo/pdf");
+      saveBlob(new Blob([(await buildContractPdf(data, await pdfFonts())) as BlobPart], { type: "application/pdf" }), pdfFileName("contract", data.ref));
+    },
+  },
+
   providers: {
     checkoutDetails: (milestoneId: string) =>
       call(() => {

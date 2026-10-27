@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BadgeCheck, LoaderCircle, MessageSquare, Send } from "lucide-react";
 import { formatDate, formatDateTime } from "@repo/utils";
+import { PdfButton } from "@/components/pdf-button";
 import { api, can, seesFinance, type DemoAction, type LeadBooking, type StaffUser } from "@/lib/api";
 import { AVAILABILITY_LABELS, MILESTONE_LABELS, QUOTE_LABELS, availabilityTone, inr, percent } from "@/lib/format";
 import { keys, useStaffMutation } from "@/lib/hooks";
@@ -130,6 +131,7 @@ export function BookingPanel({ booking, staff }: { booking: LeadBooking; staff: 
                       )}
                     </span>
                     <span className="flex items-center gap-2">
+                      <PdfButton kind="quote" id={q.id} />
                       <span className="text-xs text-muted">valid to {formatDate(q.validUntil)}</span>
                       <Pill tone={q.status === "ACCEPTED" ? "success" : q.status === "PENDING_APPROVAL" || q.status === "SENT" ? "action" : "neutral"}>{QUOTE_LABELS[q.status]}</Pill>
                     </span>
@@ -175,6 +177,7 @@ export function BookingPanel({ booking, staff }: { booking: LeadBooking; staff: 
                     ? `Signed by ${booking.contract.signedName} · ${formatDateTime(booking.contract.signedAt!)}`
                     : `Sent ${formatDateTime(booking.contract.sentAt)} · waiting for signature`}
               </p>
+              {booking.contract && <div className="mt-1"><PdfButton kind="contract" id={booking.contract.id} label="Agreement PDF" /></div>}
             </div>
             <div>
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Payout</h4>

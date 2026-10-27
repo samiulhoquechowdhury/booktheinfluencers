@@ -3,6 +3,7 @@ import { FileSignature, PenLine } from "lucide-react";
 import type { CustomerBooking } from "@repo/schemas";
 import { formatDateTime } from "@repo/utils";
 import { StatusPill } from "@/components/ui/status-pill";
+import { PdfButton } from "./pdf-button";
 import { Panel } from "./quote-panel";
 
 export function ContractPanel({ booking }: { booking: CustomerBooking }) {
@@ -33,19 +34,25 @@ export function ContractPanel({ booking }: { booking: CustomerBooking }) {
             Signed by <span className="text-ink">{contract.signedName}</span>
             {contract.signedAt && <> on {formatDateTime(contract.signedAt)}</>}.
           </p>
-          <Link href={`/esign/${contract.id}`} className="font-medium text-gold-deep hover:underline">
-            View signed contract
-          </Link>
+          <span className="flex flex-wrap items-center gap-3">
+            <Link href={`/esign/${contract.id}`} className="font-medium text-gold-deep hover:underline">
+              View signed contract
+            </Link>
+            <PdfButton kind="contract" id={contract.id} />
+          </span>
         </div>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-sm text-sm text-muted">
             Sent {formatDateTime(contract.sentAt)}. Covers scope, timings, rider, payment and cancellation terms.
           </p>
-          <Link href={`/esign/${contract.id}`} className="btn btn-gold">
-            <PenLine aria-hidden />
-            Review & sign
-          </Link>
+          <span className="flex flex-wrap items-center gap-2">
+            <PdfButton kind="contract" id={contract.id} />
+            <Link href={`/esign/${contract.id}`} className="btn btn-gold">
+              <PenLine aria-hidden />
+              Review & sign
+            </Link>
+          </span>
         </div>
       )}
     </Panel>
