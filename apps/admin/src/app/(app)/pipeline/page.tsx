@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Columns3, Rows3, X } from "lucide-react";
+import { CalendarDays, Columns3, Rows3, Search, X } from "lucide-react";
 import { formatDate, type LeadStage } from "@repo/utils";
 import { CATEGORIES } from "@repo/mock/catalogue/data";
 import { api, errorMessage, type LeadRow } from "@/lib/api";
@@ -93,35 +93,50 @@ function Pipeline() {
         }
       />
 
-      <div className="grid gap-2 rounded-xl border border-line bg-white p-3 sm:grid-cols-2 lg:grid-cols-7">
-        <input value={filters.q} onChange={(e) => set({ q: e.target.value })} placeholder="Search ref, name, phone, artist" aria-label="Search" className={`${inputClass} lg:col-span-2`} />
-        <select value={filters.owner} onChange={(e) => set({ owner: e.target.value })} aria-label="Owner" className={inputClass}>
-          <option value="">Any owner</option>
-          <option value="unassigned">Unassigned</option>
-          {owners.map((o) => <option key={o}>{o}</option>)}
-        </select>
-        <select value={filters.stage} onChange={(e) => set({ stage: e.target.value })} aria-label="Stage" className={inputClass}>
-          <option value="">Any stage</option>
-          {[...PIPELINE_COLUMNS, ...TERMINAL].map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-        </select>
-        <select value={filters.city} onChange={(e) => set({ city: e.target.value })} aria-label="City" className={inputClass}>
-          <option value="">Any city</option>
-          {cities.map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <select value={filters.category} onChange={(e) => set({ category: e.target.value })} aria-label="Category" className={inputClass}>
-          <option value="">Any category</option>
-          {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-        </select>
-        <div className="flex items-center gap-1">
-          <input type="date" value={filters.from} onChange={(e) => set({ from: e.target.value })} aria-label="Event from" className={inputClass} />
-          <input type="date" value={filters.to} onChange={(e) => set({ to: e.target.value })} aria-label="Event to" className={inputClass} />
+      <div className="space-y-2 rounded-xl border border-line bg-white p-3">
+        {/* Row 1: search and the four pickers. min-w-0 lets every control shrink inside its cell. */}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-12">
+          <div className="relative sm:col-span-2 lg:col-span-4">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
+            <input value={filters.q} onChange={(e) => set({ q: e.target.value })} placeholder="Search ref, name, phone, artist" aria-label="Search" className={`${inputClass} min-w-0 pl-9`} />
+          </div>
+          <select value={filters.owner} onChange={(e) => set({ owner: e.target.value })} aria-label="Owner" className={`${inputClass} min-w-0 lg:col-span-2`}>
+            <option value="">Any owner</option>
+            <option value="unassigned">Unassigned</option>
+            {owners.map((o) => <option key={o}>{o}</option>)}
+          </select>
+          <select value={filters.stage} onChange={(e) => set({ stage: e.target.value })} aria-label="Stage" className={`${inputClass} min-w-0 lg:col-span-2`}>
+            <option value="">Any stage</option>
+            {[...PIPELINE_COLUMNS, ...TERMINAL].map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+          </select>
+          <select value={filters.city} onChange={(e) => set({ city: e.target.value })} aria-label="City" className={`${inputClass} min-w-0 lg:col-span-2`}>
+            <option value="">Any city</option>
+            {cities.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <select value={filters.category} onChange={(e) => set({ category: e.target.value })} aria-label="Category" className={`${inputClass} min-w-0 lg:col-span-2`}>
+            <option value="">Any category</option>
+            {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+          </select>
         </div>
-        {active && (
-          <button type="button" onClick={() => router.replace(view === "table" ? `${pathname}?view=table` : pathname)} className="flex items-center gap-1 text-sm text-muted hover:text-ink lg:col-span-7">
-            <X className="size-4" aria-hidden />
-            Clear filters
-          </button>
-        )}
+
+        {/* Row 2: event date range, then clear. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="flex w-full items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted sm:w-auto">
+            <CalendarDays className="size-4" aria-hidden />
+            Event date
+          </span>
+          <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:w-auto">
+            <input type="date" value={filters.from} max={filters.to || undefined} onChange={(e) => set({ from: e.target.value })} aria-label="Event from" className={`${inputClass} min-w-0 sm:w-44`} />
+            <span className="text-sm text-muted">to</span>
+            <input type="date" value={filters.to} min={filters.from || undefined} onChange={(e) => set({ to: e.target.value })} aria-label="Event to" className={`${inputClass} min-w-0 sm:w-44`} />
+          </div>
+          {active && (
+            <button type="button" onClick={() => router.replace(view === "table" ? `${pathname}?view=table` : pathname)} className="ml-auto flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted hover:bg-cream hover:text-ink">
+              <X className="size-4" aria-hidden />
+              Clear filters
+            </button>
+          )}
+        </div>
       </div>
 
       {view === "board" ? (
