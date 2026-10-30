@@ -14,6 +14,7 @@ import { ApiError, api, errorMessage } from "@/lib/api/client";
 import { keys, useSession, useTalentSearch, useTalentSummaries } from "@/lib/api/hooks";
 import { feeBand } from "@/lib/format";
 import { OtpForm } from "@/components/auth/otp-form";
+import { isUploaded, photoAt } from "@/lib/photo";
 
 const STEPS = [
   { title: "Your event", fields: ["eventType", "eventDate", "altDate", "city", "venue", "audienceSize", "durationMins", "language"] },
@@ -385,7 +386,7 @@ function TalentPicker({ selected, onChange }: { selected: string[]; onChange: (s
             return (
               <li key={slug} className="flex items-center gap-3 rounded-xl border border-line p-2.5 pr-3">
                 <span className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-cream">
-                  <Image src={`${talent.photo}&w=96&h=96`} alt="" fill sizes="48px" className="object-cover" />
+                  <Image src={photoAt(talent.photo, 96, 96)} unoptimized={isUploaded(talent.photo)} alt="" fill sizes="48px" className="object-cover" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-display text-sm font-semibold text-ink">{talent.stageName}</span>

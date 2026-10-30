@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { hashPassword, verifyPassword, type Role, type User } from "@repo/db";
 import { INDIAN_MOBILE } from "@repo/schemas";
@@ -83,9 +84,15 @@ export class AuthService {
 
     let user = await this.prisma.db.user.findUnique({ where: { phone: input.phone } });
     if (input.as === "talent") {
-      if (!user?.roles.includes("TALENT")) {
-        throw new DomainError("NOT_INVITED", "This number has no talent account. Talent accounts are created by invite.", 403);
+      // Anyone can join as an artist: they get a private draft to complete, and nothing shows publicly until a
+      // talent manager approves it (CRM → Verifications).
+      if (!user) {
+        user = await this.prisma.db.user.create({ data: { phone: input.phone, name: input.name?.trim() || "New artist", roles: ["TALENT"] } });
+        created = true;
+      } else if (!user.roles.includes("TALENT")) {
+        user = await this.prisma.db.user.update({ where: { id: user.id }, data: { roles: { push: "TALENT" } } });
       }
+      await this.ensureTalentDraft(user);
     } else if (!user) {
       user = await this.prisma.db.user.create({ data: { phone: input.phone, name: input.name?.trim() || "Guest", roles: ["CUSTOMER"] } });
       created = true;
@@ -93,6 +100,26 @@ export class AuthService {
       user = await this.prisma.db.user.update({ where: { id: user.id }, data: { roles: { push: "CUSTOMER" } } });
     }
     return { session: await this.issue(user, false), created };
+  }
+
+  /** A private profile to fill in. The temporary slug is replaced by the stage name on submit. */
+  private async ensureTalentDraft(user: User) {
+    const existing = await this.prisma.db.talent.findUnique({ where: { userId: user.id }, select: { id: true } });
+    if (existing) return;
+    await this.prisma.db.talent.create({
+      data: {
+        userId: user.id,
+        slug: `artist-${randomBytes(5).toString("hex")}`,
+        stageName: user.name === "New artist" ? "" : user.name,
+        headline: "",
+        bio: "",
+        baseCity: "",
+        photoUrl: "",
+        representationType: "TALENT_MANAGED",
+        status: "DRAFT",
+        reviewStatus: "INCOMPLETE",
+      },
+    });
   }
 
   /**

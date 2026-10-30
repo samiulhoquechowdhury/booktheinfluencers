@@ -10,7 +10,8 @@ export type ProfileStatus = z.infer<typeof ProfileStatusSchema>;
 export const VerificationStatusSchema = z.enum(["PENDING", "VERIFIED", "REJECTED"]);
 export type VerificationStatus = z.infer<typeof VerificationStatusSchema>;
 
-const HttpsUrl = z.url({ protocol: /^https$/, message: "Use an https image link" }).max(500);
+/** An https link, or a photo the artist uploaded during onboarding. */
+const HttpsUrl = z.string().max(500).regex(/^(https:\/\/[^\s/?#]+\S*|\/v1\/media\/[\w-]+)$/, "Use an https image link");
 const List = (max: number, item = z.string().trim().min(1).max(60)) => z.array(item).max(max);
 
 export const TalentInputSchema = z
@@ -76,7 +77,9 @@ export type TalentAdminDetail = Omit<TalentInput, "slug"> & {
 };
 
 /** CAT-11: what stops a profile going live. */
-export function publishBlockers(t: { reps: { verification: VerificationStatus }[]; photoUrl: string; categories: unknown[] }) {
+export function publishBlockers(t: { reps: { verification: VerificationStatus }[]; photoUrl: string; categories: unknown[]; reviewStatus?: string | null }) {
+  // Artists who signed up themselves go live through the Verifications queue, after their ID is checked.
+  if (t.reviewStatus && t.reviewStatus !== "APPROVED") return ["Review this artist's details and ID in Verifications first"];
   return [
     ...(t.reps.some((r) => r.verification === "VERIFIED") ? [] : ["Verify at least one representative first"]),
     ...(t.photoUrl ? [] : ["Add a profile photo"]),

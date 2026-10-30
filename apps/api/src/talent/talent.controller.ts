@@ -1,11 +1,13 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, HttpCode, Inject, Param, Post, Put, Query, Res } from "@nestjs/common";
+import type { Response } from "express";
 import { z } from "zod";
 import type { Prisma } from "@repo/db";
-import { TalentBookingSchema } from "@repo/schemas";
+import { IdDocumentTypeSchema, OnboardingProfileSchema, TalentBookingSchema } from "@repo/schemas";
 import { DomainError, notFound } from "../common/errors";
 import { iso, paise, parse } from "../common/validate";
 import { CurrentUser, Roles, type AuthUser } from "../auth/guard";
 import { calendarOf } from "./calendar";
+import { OnboardingService } from "./onboarding.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { MessageBody, toMessage } from "../me/me.controller";
 
@@ -43,7 +45,55 @@ function toTalentBooking(b: Prisma.BookingGetPayload<{ include: typeof bookingIn
 @Controller("talent")
 @Roles("TALENT")
 export class TalentPortalController {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(OnboardingService) private readonly onboarding: OnboardingService,
+  ) {}
+
+  // ---------- Onboarding: profile, photos, ID, submit for review ----------
+
+  @Get("onboarding")
+  onboardingState(@CurrentUser() user: AuthUser) {
+    return this.onboarding.state(user);
+  }
+
+  @Put("onboarding")
+  saveOnboarding(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    return this.onboarding.save(user, parse(OnboardingProfileSchema, body));
+  }
+
+  @Post("onboarding/photo")
+  uploadPhoto(@CurrentUser() user: AuthUser, @Body() body: unknown, @Headers("content-type") type: string | undefined, @Query("width") width: string, @Query("height") height: string) {
+    return this.onboarding.uploadPhoto(user, body, type?.split(";")[0]?.trim(), Number(width), Number(height));
+  }
+
+  @Post("onboarding/documents")
+  uploadDocument(@CurrentUser() user: AuthUser, @Body() body: unknown, @Headers("content-type") mime: string | undefined, @Query("type") type: string, @Query("fileName") fileName: string) {
+    return this.onboarding.uploadDocument(user, parse(IdDocumentTypeSchema, type), String(fileName ?? ""), body, mime?.split(";")[0]?.trim());
+  }
+
+  @Get("onboarding/documents/:id")
+  async ownDocument(@CurrentUser() user: AuthUser, @Param("id") id: string, @Res() res: Response) {
+    const doc = await this.onboarding.ownDocument(user, id);
+    res.setHeader("Content-Type", doc.mime);
+    res.setHeader("Content-Disposition", `inline; filename="${doc.fileName}"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.end(Buffer.from(doc.bytes));
+  }
+
+  @Delete("onboarding/documents/:id")
+  @HttpCode(204)
+  deleteDocument(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.onboarding.deleteDocument(user, id);
+  }
+
+  @Post("onboarding/submit")
+  @HttpCode(200)
+  submitOnboarding(@CurrentUser() user: AuthUser) {
+    return this.onboarding.submit(user);
+  }
+
+  // ---------- Bookings and calendar ----------
 
   @Get("bookings")
   async bookings(@CurrentUser() user: AuthUser) {

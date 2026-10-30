@@ -2,7 +2,7 @@
 
 import { ApiError } from "@repo/mock/server";
 import { STAFF_ROLES, type StaffRole } from "@repo/mock/internal";
-import type { FollowUpRecord, HeroSlideRecord, ImportResult, ReconciliationOverview, ReconciliationRunRecord, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword } from "@repo/schemas";
+import type { FollowUpRecord, HeroSlideRecord, ImportResult, ReconciliationOverview, ReconciliationRunRecord, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword, VerificationDetail, VerificationRow } from "@repo/schemas";
 import { saveBlob } from "./download";
 import type { mockApi, LeadDetail, LeadRow, StaffSession } from "./mock-api";
 
@@ -64,18 +64,24 @@ async function request<T>(path: string, init: { method?: string; body?: unknown;
 const post = <T = void>(path: string, body?: unknown) => request<T>(path, { method: "POST", body });
 const id = (value: string) => encodeURIComponent(value);
 
-/** Signed-in file download: the file name comes from the API's Content-Disposition header. */
-async function download(path: string, retried = false): Promise<void> {
+/** Signed-in file fetch, refreshing the session once if needed. */
+async function fetchFile(path: string, retried = false): Promise<Response> {
   if (!accessToken && !retried) await refresh();
   const res = await fetch(`${BASE}${path}`, { credentials: "include", headers: accessToken ? { authorization: `Bearer ${accessToken}` } : {} });
   if (res.status === 401 && !retried) {
     accessToken = null;
-    if (await refresh()) return download(path, true);
+    if (await refresh()) return fetchFile(path, true);
   }
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     throw new ApiError(data?.error?.code ?? "HTTP_ERROR", data?.error?.message ?? "Couldn't download that file. Please try again.");
   }
+  return res;
+}
+
+/** Signed-in file download: the file name comes from the API's Content-Disposition header. */
+async function download(path: string): Promise<void> {
+  const res = await fetchFile(path);
   const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "document.pdf";
   saveBlob(await res.blob(), name);
 }
@@ -296,6 +302,14 @@ export const httpApi: typeof mockApi = {
   documents: {
     quotePdf: (quoteId) => download(`/admin/quotes/${id(quoteId)}/pdf`),
     contractPdf: (contractId) => download(`/admin/contracts/${id(contractId)}/pdf`),
+  },
+
+  verifications: {
+    list: () => request<VerificationRow[]>("/admin/verifications"),
+    get: (slug) => request<VerificationDetail>(`/admin/verifications/${id(slug)}`),
+    document: (documentId) => fetchFile(`/admin/verifications/documents/${id(documentId)}`).then((res) => res.blob()),
+    approve: (slug) => post(`/admin/verifications/${id(slug)}/approve`),
+    reject: (slug, reason) => post(`/admin/verifications/${id(slug)}/reject`, { reason }),
   },
 
   followUps: {

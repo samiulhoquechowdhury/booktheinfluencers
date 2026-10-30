@@ -4,7 +4,7 @@ import { TalentApplicationForm } from "@/components/talent-application-form";
 
 export const metadata: Metadata = {
   title: "Apply as an artist",
-  description: "Apply to be listed. We verify who represents you, then invite you to set up your talent portal.",
+  description: "Prefer to talk first? Tell us about yourself and our talent team will help you get listed.",
 };
 
 export default function ApplyPage() {

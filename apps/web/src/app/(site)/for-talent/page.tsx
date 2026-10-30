@@ -6,13 +6,13 @@ import { PageIntro } from "@/components/ui/feedback";
 
 export const metadata: Metadata = {
   title: "For artists & managers",
-  description: "Get qualified enquiries, written contracts and clear payouts. Join by invitation from our talent team.",
+  description: "Get qualified enquiries, written contracts and clear payouts. Create your artist profile and go live once our team has verified you.",
 };
 
 const STEPS = [
-  { title: "Introduce yourself", body: "Send your profile, a few recent performance videos and who manages your bookings." },
-  { title: "We verify representation", body: "We confirm you or your agency are authorised to take bookings, and agree fee bands." },
-  { title: "Get your invite", body: "You receive a private link to set up your portal login. Your public profile goes live after review." },
+  { title: "Sign in with your mobile", body: "Use your number to create your artist account. It takes a minute." },
+  { title: "Complete your profile", body: "Add your photos, full name, social media links and a government ID." },
+  { title: "We verify you", body: "Our talent team checks your details and documents. Your profile goes live only after approval." },
   { title: "Take bookings", body: "Confirm dates, see your contracted payout for each booking and block days you can't take." },
 ];
 
@@ -21,8 +21,8 @@ export default function ForTalentPage() {
     <>
       <div className="shell py-12 sm:py-16">
         <PageIntro eyebrow="For artists & managers" title="Serious enquiries. Signed terms. Paid on time.">
-          We work with artists and agencies directly. Accounts are created by invitation once we've verified who
-          represents you.
+          We work with artists and agencies directly. Set up your profile yourself, and it appears on the site once
+          we've verified you.
         </PageIntro>
 
         <ol className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -36,12 +36,12 @@ export default function ForTalentPage() {
         </ol>
 
         <div className="mt-10 flex flex-wrap gap-3">
-          <Link href="/for-talent/apply" className="btn btn-gold">
-            Apply now
+          <Link href="/sign-in?as=talent&next=/portal" className="btn btn-gold">
+            Create your artist profile
             <ArrowRight aria-hidden />
           </Link>
-          <Link href="/sign-in?as=talent" className="btn btn-outline">
-            Already invited? Sign in
+          <Link href="/for-talent/apply" className="btn btn-outline">
+            Talk to our team first
             <ArrowRight aria-hidden />
           </Link>
         </div>

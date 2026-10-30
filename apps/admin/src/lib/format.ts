@@ -1,4 +1,4 @@
-import type { AvailabilityStatus, MilestoneStatus, ProfileStatus, QuoteStatus, VerificationStatus } from "@repo/schemas";
+import type { AvailabilityStatus, MilestoneStatus, ProfileStatus, QuoteStatus, ReviewStatus, VerificationStatus } from "@repo/schemas";
 import { formatINR, formatINRCompact, type LeadStage } from "@repo/utils";
 
 export const inr = (paise: string | bigint) => formatINR(BigInt(paise));
@@ -88,3 +88,12 @@ export const verificationTone = (v: VerificationStatus): Tone => (v === "VERIFIE
 /** Money inputs are typed in whole rupees; the API takes paise strings. */
 export const toRupees = (paise: string | null | undefined) => (paise ? String(BigInt(paise) / 100n) : "");
 export const toPaise = (rupees: string) => String(BigInt(rupees.replace(/\D/g, "") || "0") * 100n);
+
+export const REVIEW_LABELS: Record<ReviewStatus, string> = {
+  INCOMPLETE: "Not finished",
+  SUBMITTED: "Waiting for review",
+  APPROVED: "Verified",
+  REJECTED: "Sent back",
+};
+
+export const reviewTone = (status: ReviewStatus): Tone => (status === "APPROVED" ? "success" : status === "REJECTED" ? "danger" : status === "SUBMITTED" ? "action" : "neutral");

@@ -14,6 +14,7 @@ import { ContractPanel } from "./contract-panel";
 import { DemoControls } from "./demo-controls";
 import { PaymentsPanel } from "./payments-panel";
 import { QuotePanel } from "./quote-panel";
+import { isUploaded, photoAt } from "@/lib/photo";
 
 export function BookingCard({ leadId, booking }: { leadId: string; booking: CustomerBooking }) {
   const status = customerStatus(booking);
@@ -29,7 +30,7 @@ export function BookingCard({ leadId, booking }: { leadId: string; booking: Cust
       <header className="flex flex-wrap items-center gap-4">
         <span className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-cream">
           {booking.talent.photo && (
-            <Image src={`${booking.talent.photo}&w=128&h=128`} alt="" fill sizes="64px" className="object-cover" />
+            <Image src={photoAt(booking.talent.photo, 128, 128)} unoptimized={isUploaded(booking.talent.photo)} alt="" fill sizes="64px" className="object-cover" />
           )}
         </span>
         <div className="min-w-0 flex-1">

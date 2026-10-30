@@ -8,6 +8,7 @@ import { api } from "@/lib/api/client";
 import { useCompareList } from "@/lib/compare";
 import { REPRESENTATION_LABELS, ctaLabel, enquiryHref, feeBand } from "@/lib/format";
 import { EmptyState, Spinner } from "@/components/ui/feedback";
+import { isUploaded, photoAt } from "@/lib/photo";
 
 export function CompareView() {
   const { list, remove } = useCompareList();
@@ -59,7 +60,7 @@ export function CompareView() {
               {talents.map((t) => (
                 <th key={t.slug} scope="col" className="p-4 align-top font-normal">
                   <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-cream">
-                    <Image src={`${t.photo}&w=400&h=300`} alt="" fill sizes="25vw" className="object-cover" />
+                    <Image src={photoAt(t.photo, 400, 300)} unoptimized={isUploaded(t.photo)} alt="" fill sizes="25vw" className="object-cover" />
                     <button
                       type="button"
                       onClick={() => remove(t.slug)}

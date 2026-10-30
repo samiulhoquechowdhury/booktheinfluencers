@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, CreditCard, ExternalLink, Globe, Inbox, KeyRound, LayoutDashboard, LogOut, Menu, ScrollText, ShieldCheck, UserCog, Users, Wallet, X } from "lucide-react";
+import { BadgeCheck, ClipboardList, CreditCard, ExternalLink, Globe, Inbox, KeyRound, LayoutDashboard, LogOut, Menu, ScrollText, ShieldCheck, UserCog, Users, Wallet, X } from "lucide-react";
 import type { StaffRole } from "@repo/mock/internal";
 import { api, can, type StaffUser } from "@/lib/api";
 import { useStaffSession } from "@/lib/hooks";
@@ -17,6 +17,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; roles?: 
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/payouts", label: "Payouts", icon: Wallet, roles: ["ACCOUNTS"] },
   { href: "/talents", label: "Talents", icon: Users },
+  { href: "/verifications", label: "Verifications", icon: BadgeCheck, roles: ["TALENT_MANAGER"] },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/staff", label: "Staff", icon: UserCog, roles: ["SUPER_ADMIN"] },
   { href: "/website", label: "Website", icon: Globe, roles: ["SUPER_ADMIN"] },

@@ -4,6 +4,8 @@ import type {
   CustomerBooking,
   CustomerLead,
   EnquiryFormValues,
+  OnboardingDocument,
+  OnboardingState,
   TalentBooking,
   TalentCalendar,
   TalentProfile,
@@ -74,20 +76,44 @@ function refresh() {
 
 const json = <T>(path: string, body?: unknown, method = "POST") => request<T>(path, { method, body });
 
-/** Signed-in file download: the file name comes from the API's Content-Disposition header. */
-async function download(path: string, retried = false): Promise<void> {
+/** Signed-in file fetch, refreshing the session once if needed. */
+async function fetchFile(path: string, retried = false): Promise<Response> {
   if (!accessToken && !retried) await refresh();
   const res = await fetch(`${BASE}${path}`, { credentials: "include", headers: accessToken ? { authorization: `Bearer ${accessToken}` } : {} });
   if (res.status === 401 && !retried) {
     accessToken = null;
-    if (await refresh()) return download(path, true);
+    if (await refresh()) return fetchFile(path, true);
   }
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     throw new ApiError(data?.error?.code ?? "HTTP_ERROR", data?.error?.message ?? "Couldn't download that file. Please try again.");
   }
+  return res;
+}
+
+/** Signed-in file download: the file name comes from the API's Content-Disposition header. */
+async function download(path: string): Promise<void> {
+  const res = await fetchFile(path);
   const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "document.pdf";
   saveBlob(await res.blob(), name);
+}
+
+/** Uploads go as raw bytes with their own content type (the API's JSON parser skips them). */
+async function upload<T>(path: string, file: Blob, retried = false): Promise<T> {
+  if (!accessToken && !retried) await refresh();
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": file.type, ...(accessToken && { authorization: `Bearer ${accessToken}` }) },
+    body: file,
+  });
+  if (res.status === 401 && !retried) {
+    accessToken = null;
+    if (await refresh()) return upload(path, file, true);
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(data?.error?.code ?? "HTTP_ERROR", data?.error?.message ?? "Upload failed. Please try again.");
+  return data as T;
 }
 
 export const httpApi: typeof mockApi = {
@@ -148,6 +174,16 @@ export const httpApi: typeof mockApi = {
     booking: (bookingId) => request<TalentBooking>(`/talent/bookings/${encodeURIComponent(bookingId)}`),
     blackouts: () => request<TalentCalendar>("/talent/blackouts"),
     setBlackout: (date, on) => request<void>(`/talent/blackouts/${encodeURIComponent(date)}`, { method: on ? "PUT" : "DELETE" }),
+
+    onboarding: {
+      state: () => request<OnboardingState>("/talent/onboarding"),
+      save: (profile) => request<OnboardingState>("/talent/onboarding", { method: "PUT", body: profile }),
+      uploadPhoto: (photo, width, height) => upload<{ url: string }>(`/talent/onboarding/photo?width=${width}&height=${height}`, photo),
+      uploadDocument: (type, file) => upload<OnboardingDocument>(`/talent/onboarding/documents?type=${type}&fileName=${encodeURIComponent(file.name)}`, file),
+      deleteDocument: (id) => request<void>(`/talent/onboarding/documents/${encodeURIComponent(id)}`, { method: "DELETE" }),
+      document: (id) => fetchFile(`/talent/onboarding/documents/${encodeURIComponent(id)}`).then((res) => res.blob()),
+      submit: () => json<OnboardingState>("/talent/onboarding/submit"),
+    },
   },
 
   messages: {

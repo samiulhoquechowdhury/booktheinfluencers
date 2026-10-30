@@ -12,6 +12,7 @@ import { FavouriteButton } from "@/components/talent/favourite-button";
 import { CompareButton, CompareTray } from "@/components/talent/compare-button";
 import { TalentCard } from "@/components/talent/talent-card";
 import { Spinner } from "@/components/ui/feedback";
+import { isUploaded, photoAt } from "@/lib/photo";
 
 export function generateStaticParams() {
   return TALENTS.map((talent) => ({ slug: talent.slug }));
@@ -26,7 +27,7 @@ export async function generateMetadata({ params }: PageProps<"/talent/[slug]">):
     title: `${talent.stageName} — ${talent.headline}`,
     description,
     alternates: { canonical: `/talent/${talent.slug}` },
-    openGraph: { title: talent.stageName, description, images: [`${talent.photo}&w=1200&h=630`] },
+    openGraph: { title: talent.stageName, description, images: [photoAt(talent.photo, 1200, 630)] },
   };
 }
 
@@ -51,7 +52,7 @@ async function Profile({ params }: Pick<PageProps<"/talent/[slug]">, "params">) 
     name: talent.stageName,
     jobTitle: talent.headline,
     description: talent.bio,
-    image: `${talent.photo}&w=800`,
+    image: talent.photo.startsWith("/") ? `${SITE_URL}${talent.photo}` : photoAt(talent.photo, 800),
     url: `${SITE_URL}/talent/${talent.slug}`,
     homeLocation: { "@type": "Place", name: talent.baseCity },
     knowsLanguage: talent.languages,
@@ -80,7 +81,8 @@ async function Profile({ params }: Pick<PageProps<"/talent/[slug]">, "params">) 
         <div className="grid gap-3 sm:grid-cols-[1fr_140px] lg:grid-cols-[1fr_120px] xl:grid-cols-[1fr_150px]">
           <div className="relative aspect-[4/5] overflow-hidden rounded-card bg-cream">
             <Image
-              src={`${talent.photo}&w=900&h=1125`}
+              src={photoAt(talent.photo, 900, 1125)}
+              unoptimized={isUploaded(talent.photo)}
               alt={`Portrait of ${talent.stageName}`}
               fill
               priority
@@ -91,7 +93,7 @@ async function Profile({ params }: Pick<PageProps<"/talent/[slug]">, "params">) 
           <ul className="grid grid-cols-3 gap-3 sm:grid-cols-1 sm:content-start">
             {talent.gallery.map((src, index) => (
               <li key={src} className="relative aspect-square overflow-hidden rounded-xl bg-cream">
-                <Image src={`${src}&w=300&h=300`} alt={`${talent.stageName} — gallery photo ${index + 1}`} fill sizes="150px" className="object-cover" />
+                <Image src={photoAt(src, 300, 300)} unoptimized={isUploaded(src)} alt={`${talent.stageName} — gallery photo ${index + 1}`} fill sizes="150px" className="object-cover" />
               </li>
             ))}
           </ul>
@@ -112,11 +114,13 @@ async function Profile({ params }: Pick<PageProps<"/talent/[slug]">, "params">) 
               <dt className="sr-only">Based in</dt>
               <dd>Based in {talent.baseCity}</dd>
             </div>
-            <div className="flex items-center gap-2 text-ink-soft">
-              <Plane className="size-4 text-gold-deep" aria-hidden />
-              <dt className="sr-only">Travels to</dt>
-              <dd>Travels: {talent.travelsTo.join(", ")}</dd>
-            </div>
+            {talent.travelsTo.length > 0 && (
+              <div className="flex items-center gap-2 text-ink-soft">
+                <Plane className="size-4 text-gold-deep" aria-hidden />
+                <dt className="sr-only">Travels to</dt>
+                <dd>Travels: {talent.travelsTo.join(", ")}</dd>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-ink-soft sm:col-span-2">
               <Languages className="size-4 text-gold-deep" aria-hidden />
               <dt className="sr-only">Languages</dt>

@@ -109,6 +109,7 @@ export function buildSeed(): MockDb {
     loginEvents: [],
     followUps: [],
     reconciliationRuns: [],
+    onboarding: {},
     processedWebhooks: [],
     messages: [],
     contactRequests: [],

@@ -26,8 +26,8 @@ export function TalentApplicationForm() {
           Your reference is <span className="font-display font-semibold text-gold-deep">{submit.data.ref}</span>.
         </p>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted">
-          Our talent team reviews every application. If it's a fit, we'll verify who represents you and send a private
-          invite to set up your portal.
+          Our talent team reviews every application. If it's a fit, we'll get in touch and help you set up your artist
+          profile.
         </p>
         <Link href="/for-talent" className="btn btn-outline mt-6">
           Back to For artists

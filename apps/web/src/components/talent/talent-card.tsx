@@ -4,13 +4,15 @@ import { BadgeCheck, MapPin } from "lucide-react";
 import type { TalentSummary } from "@repo/schemas";
 import { REPRESENTATION_LABELS, feeBand } from "@/lib/format";
 import { FavouriteButton } from "./favourite-button";
+import { isUploaded, photoAt } from "@/lib/photo";
 
 export function TalentCard({ talent, priority = false }: { talent: TalentSummary; priority?: boolean }) {
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-card border border-line bg-white transition-shadow hover:shadow-card">
       <div className="relative aspect-[4/5] overflow-hidden bg-cream">
         <Image
-          src={`${talent.photo}&w=480&h=600`}
+          src={photoAt(talent.photo, 480, 600)}
+          unoptimized={isUploaded(talent.photo)}
           alt={`Portrait of ${talent.stageName}`}
           fill
           priority={priority}

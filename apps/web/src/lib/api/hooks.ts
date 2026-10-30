@@ -14,6 +14,7 @@ export const keys = {
   talentBookings: ["talent", "bookings"] as const,
   talentBooking: (id: string) => ["talent", "bookings", id] as const,
   blackouts: ["talent", "blackouts"] as const,
+  onboarding: ["talent", "onboarding"] as const,
   leadMessages: (leadId: string) => ["messages", "lead", leadId] as const,
   talentMessages: (bookingId: string) => ["messages", "talent", bookingId] as const,
   notifications: ["notifications"] as const,
@@ -68,6 +69,10 @@ export function useTalentBookings(enabled = true) {
 
 export function useTalentBooking(id: string, enabled = true) {
   return useQuery({ queryKey: keys.talentBooking(id), queryFn: () => api.talent.booking(id), enabled });
+}
+
+export function useOnboarding() {
+  return useQuery({ queryKey: keys.onboarding, queryFn: api.talent.onboarding.state });
 }
 
 export function useBlackouts(enabled = true) {

@@ -25,6 +25,9 @@ import { StaffAccountsService } from "./staff-accounts/staff-accounts.service";
 import { TalentPortalController } from "./talent/talent.controller";
 import { TalentAdminController } from "./talents/talent-admin.controller";
 import { TalentAdminService } from "./talents/talent-admin.service";
+import { OnboardingService } from "./talent/onboarding.service";
+import { VerificationsController } from "./verifications/verifications.controller";
+import { VerificationsService } from "./verifications/verifications.service";
 import { DevProvidersController } from "./webhooks/dev-providers.controller";
 import { WebhooksController } from "./webhooks/webhooks.controller";
 
@@ -45,6 +48,7 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     CustomerDocumentsController,
     StaffDocumentsController,
     ReconciliationController,
+    VerificationsController,
     WebhooksController,
     // Simulated provider screens never ship to production.
     ...(env.NODE_ENV === "production" ? [] : [DevProvidersController]),
@@ -58,6 +62,8 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     SiteService,
     FollowUpsService,
     DocumentsService,
+    OnboardingService,
+    VerificationsService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],

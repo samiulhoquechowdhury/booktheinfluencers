@@ -1,7 +1,7 @@
 "use client";
 
-import { EnquiryInputSchema, INDIAN_MOBILE, type EnquiryFormValues } from "@repo/schemas";
-import { ACCOUNT_MANAGER, DEMO_OTP, TALENT_LOGINS } from "@repo/mock/internal";
+import { EnquiryInputSchema, INDIAN_MOBILE, type EnquiryFormValues, type IdDocumentType, type OnboardingProfile } from "@repo/schemas";
+import { ACCOUNT_MANAGER, DEMO_OTP } from "@repo/mock/internal";
 import {
   ApiError,
   acceptQuote,
@@ -28,6 +28,7 @@ import {
 import { toCustomerLead, toTalentBooking } from "@repo/mock/serializers";
 import { contractPdfData, quotePdfData } from "@repo/mock/documents";
 import { recordLogin } from "@repo/mock/login-events";
+import { addOnboardingDocument, ensureOnboardingDraft, onboardingState, ownDocumentUrl, removeOnboardingDocument, saveOnboarding, submitOnboarding } from "@repo/mock/onboarding";
 import { pdfFonts, saveBlob } from "@/lib/download";
 import { loadDb, mutate, readSessionUserId, resetDb, writeSessionUserId } from "@repo/mock/store";
 import type { MessageRec, MockDb, UserRec } from "@repo/mock/types";
@@ -59,6 +60,14 @@ function currentUser(db: MockDb): UserRec {
   return user;
 }
 
+const readDataUrl = (file: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new ApiError("VALIDATION", "Couldn't read that file"));
+    reader.readAsDataURL(file);
+  });
+
 function currentTalent(db: MockDb) {
   const user = currentUser(db);
   if (!user.roles.includes("TALENT") || !user.talentSlug) throw new ApiError("FORBIDDEN", "Talent accounts only");
@@ -80,7 +89,7 @@ export const mockApi = {
         return { sentTo: phone, resendInSeconds: 30 };
       }),
 
-    /** AUTH-1/AUTH-4: phone OTP; a new customer account is created on first verify. AUTH-3: talent accounts are invite-only. */
+    /** AUTH-1/AUTH-4: phone OTP; a new customer account is created on first verify. A new talent sign-in starts a private draft profile. */
     verifyOtp: (input: { phone: string; code: string; name?: string; as: "customer" | "talent" }) =>
       call(() => {
         try {
@@ -89,9 +98,14 @@ export const mockApi = {
             let user = db.users.find((u) => u.phone === input.phone);
             let created = false;
             if (input.as === "talent") {
-              if (!user?.roles.includes("TALENT") && !TALENT_LOGINS[input.phone]) {
-                throw new ApiError("NOT_INVITED", "This number has no talent account. Talent accounts are created by invite.");
+              if (!user) {
+                user = { id: newId("usr"), phone: input.phone, name: input.name?.trim() || "New artist", email: null, roles: ["TALENT"], talentSlug: null, createdAt: new Date().toISOString() };
+                db.users.push(user);
+                created = true;
+              } else if (!user.roles.includes("TALENT")) {
+                user.roles.push("TALENT");
               }
+              ensureOnboardingDraft(db, user);
             } else if (!user) {
               user = {
                 id: newId("usr"),
@@ -116,7 +130,7 @@ export const mockApi = {
           if (error instanceof ApiError) {
             mutate((db) => {
               const known = db.users.find((u) => u.phone === input.phone);
-              recordLogin(db, { audience: input.as, event: "sign_in_failed", identifier: input.phone, userId: known?.id ?? null, userName: known?.name ?? null, detail: error.code === "NOT_INVITED" ? "No artist account for this number" : "Wrong or expired code" });
+              recordLogin(db, { audience: input.as, event: "sign_in_failed", identifier: input.phone, userId: known?.id ?? null, userName: known?.name ?? null, detail: "Wrong or expired code" });
             });
           }
           throw error;
@@ -329,6 +343,36 @@ export const mockApi = {
     blackouts: () => call(() => calendarFor(loadDb(), currentTalent(loadDb()).slug)),
 
     setBlackout: (date: string, on: boolean) => call(() => mutate((db) => setCalendarDate(db, currentTalent(db).slug, date, on, "artist"))),
+
+    onboarding: {
+      state: () =>
+        call(() => {
+          const db = loadDb();
+          return onboardingState(db, currentTalent(db).slug);
+        }),
+      save: (profile: OnboardingProfile) => call(() => mutate((db) => saveOnboarding(db, currentTalent(db).slug, profile))),
+      /** The photo arrives already resized by the browser (lib/image.ts). */
+      uploadPhoto: async (photo: Blob, _width: number, _height: number) => {
+        const url = await readDataUrl(photo);
+        return call(() => {
+          currentTalent(loadDb());
+          return { url };
+        });
+      },
+      uploadDocument: async (type: IdDocumentType, file: File) => {
+        const dataUrl = await readDataUrl(file);
+        return call(() => mutate((db) => addOnboardingDocument(db, currentTalent(db).slug, type, { fileName: file.name, mime: file.type, size: file.size, dataUrl })));
+      },
+      deleteDocument: (id: string) => call(() => mutate((db) => removeOnboardingDocument(db, currentTalent(db).slug, id))),
+      document: async (id: string) => {
+        const url = await call(() => {
+          const db = loadDb();
+          return ownDocumentUrl(db, currentTalent(db).slug, id);
+        });
+        return (await fetch(url)).blob();
+      },
+      submit: () => call(() => mutate((db) => submitOnboarding(db, currentTalent(db).slug))),
+    },
   },
 
   messages: {

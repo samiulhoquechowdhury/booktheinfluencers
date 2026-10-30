@@ -10,6 +10,7 @@ import { reconciliationOverview, runReconciliation } from "@repo/mock/reconcile"
 import { pdfFonts, saveBlob } from "./download";
 import { createFollowUp, followUpsFor, myFollowUps, nextFollowUpAt, updateFollowUp } from "@repo/mock/follow-ups";
 import { signIns } from "@repo/mock/login-events";
+import { approveArtist, rejectArtist, staffDocumentUrl, verificationDetail, verificationQueue } from "@repo/mock/onboarding";
 import { createHero, deleteHero, listHero, reorderHero, updateHero, uploadMedia } from "@repo/mock/site";
 import {
   changeStaffPassword,
@@ -199,6 +200,17 @@ export const mockApi = {
       const { buildContractPdf, pdfFileName } = await import("@repo/pdf");
       saveBlob(new Blob([(await buildContractPdf(data, await pdfFonts())) as BlobPart], { type: "application/pdf" }), pdfFileName("contract", data.ref));
     },
+  },
+
+  verifications: {
+    list: () => call(() => verificationQueue(loadDb(), actor())),
+    get: (slug: string) => call(() => verificationDetail(loadDb(), actor(), slug)),
+    document: async (documentId: string) => {
+      const { dataUrl } = await call(() => mutate((db) => staffDocumentUrl(db, actor(), documentId)));
+      return (await fetch(dataUrl)).blob();
+    },
+    approve: (slug: string) => call(() => mutate((db) => approveArtist(db, actor(), slug))),
+    reject: (slug: string, reason: string) => call(() => mutate((db) => rejectArtist(db, actor(), slug, { reason }))),
   },
 
   followUps: {

@@ -11,6 +11,7 @@ import { customerStatus, needsCustomerAction } from "@/lib/booking-status";
 import { RequireSession } from "@/components/auth/require-session";
 import { EmptyState, ErrorState, Spinner } from "@/components/ui/feedback";
 import { StatusPill } from "@/components/ui/status-pill";
+import { isUploaded, photoAt } from "@/lib/photo";
 
 export function AccountDashboard() {
   return <RequireSession role="CUSTOMER">{(session) => <Dashboard name={session.name} />}</RequireSession>;
@@ -127,7 +128,7 @@ function LeadList({ title, leads, empty }: { title: string; leads: CustomerLead[
                         <li key={booking.id} className="flex items-center gap-3 rounded-xl bg-cream-soft p-2.5">
                           <span className="relative size-11 shrink-0 overflow-hidden rounded-lg bg-cream">
                             {booking.talent.photo && (
-                              <Image src={`${booking.talent.photo}&w=88&h=88`} alt="" fill sizes="44px" className="object-cover" />
+                              <Image src={photoAt(booking.talent.photo, 88, 88)} unoptimized={isUploaded(booking.talent.photo)} alt="" fill sizes="44px" className="object-cover" />
                             )}
                           </span>
                           <span className="min-w-0 flex-1">

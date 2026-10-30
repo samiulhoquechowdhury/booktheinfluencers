@@ -7,7 +7,10 @@ import type {
   QuoteStatus,
   HeroSlideRecord,
   LoginEventRecord,
+  OnboardingDocument,
+  OnboardingProfile,
   ReconciliationRunRecord,
+  ReviewStatus,
   StaffRoleName,
   TalentAdminDetail,
 } from "@repo/schemas";
@@ -179,6 +182,8 @@ export type MockDb = {
   /** Home page hero carousel and the images uploaded for it (data URLs in demo mode). */
   heroSlides: HeroSlideRec[];
   media: Record<string, string>;
+  /** Artists who signed up themselves, keyed by talent slug (CRM → Verifications). */
+  onboarding: Record<string, OnboardingRec>;
   /** Payment reconciliation runs, newest first (CRM → Payments). */
   reconciliationRuns: ReconciliationRunRecord[];
   /** Sales follow-ups on leads. */
@@ -200,6 +205,18 @@ export type StaffAccountRec = {
   mustChangePassword: boolean;
   mfaEnrolled: boolean;
   lastLoginAt: string | null;
+  createdAt: string;
+};
+
+export type OnboardingRec = {
+  userId: string;
+  status: ReviewStatus;
+  reviewNote: string | null;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  reviewedByName: string | null;
+  profile: OnboardingProfile;
+  documents: (OnboardingDocument & { dataUrl: string })[];
   createdAt: string;
 };
 

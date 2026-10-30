@@ -203,9 +203,16 @@ model Category {
   talents   TalentCategory[]
 }
 
+enum TalentReviewStatus {
+  INCOMPLETE
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
 model Talent {
-  id                 String             @id @default(cuid())
-  slug               String             @unique
+  id                 String              @id @default(cuid())
+  slug               String              @unique
   stageName          String
   headline           String
   bio                String
@@ -214,19 +221,27 @@ model Talent {
   languages          String[]
   eventTypes         String[]
   tags               String[]
-  tier               TalentTier         @default(STANDARD)
-  status             ProfileStatus      @default(DRAFT)
-  featured           Boolean            @default(false)
-  blackoutSelfEdit   Boolean            @default(true) // TAL-3: the artist may edit their own calendar
+  tier               TalentTier          @default(STANDARD)
+  status             ProfileStatus       @default(DRAFT)
+  featured           Boolean             @default(false)
+  blackoutSelfEdit   Boolean             @default(true) // TAL-3: the artist may edit their own calendar
   representationType RepresentationType
   feeBandMinPaise    BigInt? // public
   feeBandMaxPaise    BigInt? // public
   photoUrl           String
   galleryUrls        String[]
-  pastEvents         Json               @default("[]") // [{ title, city, year }]
-  userId             String?            @unique // talent portal login
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  pastEvents         Json                @default("[]") // [{ title, city, year }]
+  userId             String?             @unique // talent portal login
+  // Self-service onboarding. reviewStatus is null for profiles created by staff, which skip this review.
+  reviewStatus       TalentReviewStatus?
+  reviewNote         String? // why it was rejected, shown to the artist
+  submittedAt        DateTime?
+  reviewedAt         DateTime?
+  reviewedByName     String?
+  legalName          String? // private: matched against ID documents, never public
+  socialLinks        Json                @default("{}") // { instagram, youtube, facebook, x, spotify, website }
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   user       User?            @relation(fields: [userId], references: [id])
   categories TalentCategory[]
@@ -235,8 +250,10 @@ model Talent {
   blackouts  Blackout[]
   bookings   Booking[]
   favourites Favourite[]
+  documents  TalentDocument[]
 
   @@index([status, tier])
+  @@index([reviewStatus, submittedAt])
 }
 
 model TalentCategory {
@@ -726,4 +743,22 @@ model ReconciliationRun {
   durationMs Int
 
   @@index([ranAt])
+}
+
+/// Government ID uploaded during onboarding. Private: only the artist and talent managers can read it, every
+/// staff view is audited, and it's never part of a public response. Move to encrypted object storage before launch.
+model TalentDocument {
+  id        String   @id @default(cuid())
+  talentId  String
+  /// AADHAAR | VOTER_ID | PAN | PASSPORT | DRIVING_LICENCE
+  type      String
+  fileName  String
+  mime      String
+  size      Int
+  bytes     Bytes
+  createdAt DateTime @default(now())
+
+  talent Talent @relation(fields: [talentId], references: [id], onDelete: Cascade)
+
+  @@index([talentId])
 }

@@ -13,8 +13,8 @@ export async function createApp() {
   app.setGlobalPrefix("v1");
   // The website proxies /v1 from the same machine: trust its X-Forwarded-For so sign-in history shows the visitor's IP.
   app.set("trust proxy", "loopback");
-  // Image uploads (POST /v1/admin/media) arrive as raw bytes; everything else stays JSON.
-  app.useBodyParser("raw", { type: ["image/jpeg", "image/png", "image/webp"], limit: "5mb" });
+  // Image and ID uploads arrive as raw bytes; everything else stays JSON.
+  app.useBodyParser("raw", { type: ["image/jpeg", "image/png", "image/webp", "application/pdf"], limit: "6mb" });
   // Room for a 500-row talent CSV (POST /v1/admin/talents/import); everything else is far smaller.
   app.useBodyParser("json", { limit: "1mb" });
   app.use(helmet());

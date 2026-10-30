@@ -88,11 +88,13 @@ describe("customer auth", () => {
     await http().post("/v1/auth/refresh").set("cookie", second).expect(401); // family revoked
   });
 
-  it("keeps talent sign-in invite-only", async () => {
+  it("gives a new talent sign-in a private draft, never a public profile", async () => {
     const phone = randomPhone();
     await http().post("/v1/auth/otp/send").send({ phone }).expect(200);
-    const res = await http().post("/v1/auth/otp/verify").send({ phone, code: "123456", as: "talent" }).expect(403);
-    expect(res.body.error.code).toBe("NOT_INVITED");
+    const res = await http().post("/v1/auth/otp/verify").send({ phone, code: "123456", as: "talent" }).expect(200);
+    expect(res.body.user.roles).toEqual(["TALENT"]);
+    expect(res.body.user.talentSlug).toMatch(/^artist-/);
+    await http().get(`/v1/talents/${res.body.user.talentSlug}`).expect(404);
   });
 });
 

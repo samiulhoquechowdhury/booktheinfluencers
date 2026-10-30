@@ -9,3 +9,4 @@ export * from "./site";
 export * from "./talent-import";
 export * from "./follow-ups";
 export * from "./reconciliation";
+export * from "./talent-onboarding";

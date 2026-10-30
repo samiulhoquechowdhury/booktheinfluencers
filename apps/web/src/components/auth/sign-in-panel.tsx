@@ -24,7 +24,7 @@ export function SignInPanel() {
         <p className="mt-2 text-sm text-muted">
           {as === "customer"
             ? "Use your mobile number. New here? We'll create your account when you verify."
-            : "For artists and representatives invited by our team."}
+            : "Use your mobile number. New here? You'll set up your artist profile next, and it goes live once we've verified it."}
         </p>
 
         <div role="tablist" aria-label="Account type" className="mt-6 grid grid-cols-2 rounded-md bg-cream p-1">
@@ -61,7 +61,7 @@ export function SignInPanel() {
         <p className="mt-1">
           Customer with sample bookings: <span className="font-semibold text-ink">{DEMO_CUSTOMER_PHONE}</span>. Talent
           (Aanya Kapoor): <span className="font-semibold text-ink">{talentPhone}</span>. Any other number creates a new
-          customer. The code is always 123456.
+          customer, or a new artist on the Talent tab. The code is always 123456.
         </p>
       </div>
     </div>
