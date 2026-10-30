@@ -14,7 +14,7 @@ export default function ApplyPage() {
         <PageIntro eyebrow="For artists & managers" title="Apply to be listed">
           Tell us about your act. There's no fee to apply or to be listed.
         </PageIntro>
-        <div className="mt-10 max-w-3xl">
+        <div className="mt-10">
           <TalentApplicationForm />
         </div>
       </div>

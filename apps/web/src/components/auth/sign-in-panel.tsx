@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { DEMO_CUSTOMER_PHONE, TALENT_LOGINS } from "@repo/mock/internal";
+import { HideFooter } from "@/components/ui/form-steps";
 import { OtpForm } from "./otp-form";
 
 /** Only same-site paths are honoured as a redirect target. */
@@ -19,6 +20,7 @@ export function SignInPanel() {
 
   return (
     <div className="w-full max-w-md">
+      <HideFooter />
       <div className="rounded-card border border-line bg-white p-7 shadow-card sm:p-9">
         <h1 className="font-serif text-3xl font-semibold text-ink">Sign in</h1>
         <p className="mt-2 text-sm text-muted">

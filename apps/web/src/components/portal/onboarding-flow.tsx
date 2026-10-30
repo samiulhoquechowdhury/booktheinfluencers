@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, Clock, CloudCheck, ImagePlus, LoaderCircle, Plus, ShieldCheck, Trash2, TriangleAlert, Upload, X } from "lucide-react";
 import {
@@ -23,6 +23,7 @@ import { api, errorMessage } from "@/lib/api/client";
 import { keys } from "@/lib/api/hooks";
 import { prepareArtistPhoto } from "@/lib/image";
 import { isUploaded } from "@/lib/photo";
+import { ActionBar, Field, HideFooter, StepRail, fieldClass, showFirstProblem, type Control } from "@/components/ui/form-steps";
 import { DocumentLink, ProfileSummary } from "./profile-summary";
 
 // Shown in place of the portal until an artist is approved: their profile, photos, social links and ID, then review.
@@ -38,7 +39,7 @@ const STEPS = [
 type Step = (typeof STEPS)[number]["key"];
 type Errors = Record<string, string>;
 
-const inputClass = "w-full rounded-md border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-gold aria-[invalid=true]:border-rose-400";
+const inputClass = fieldClass;
 const SAVE_AFTER_MS = 1200;
 
 /** Field problems for one step: format errors, plus what's still needed before it's complete. */
@@ -143,14 +144,6 @@ function Wizard({ state }: { state: OnboardingState }) {
     heading.current?.focus({ preventScroll: true });
   }
 
-  function showFirstProblem() {
-    requestAnimationFrame(() => {
-      const first = document.querySelector<HTMLElement>('[aria-invalid="true"], [data-problem]');
-      first?.scrollIntoView({ block: "center", behavior: "smooth" });
-      first?.focus({ preventScroll: true });
-    });
-  }
-
   function next() {
     const problems = problemsIn(draft, state.documents.length, step);
     setErrors(problems);
@@ -162,40 +155,15 @@ function Wizard({ state }: { state: OnboardingState }) {
   const percent = Math.round((done / (STEPS.length - 1)) * 100);
 
   return (
-    <div data-hide-footer className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-10">
-      <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
-        <div className="flex items-center justify-between text-xs font-semibold text-ink-soft">
-          <span>{percent === 100 ? "Ready to send" : `${percent}% complete`}</span>
-          <span className="lg:hidden">Step {index + 1} of {STEPS.length}</span>
-        </div>
-        <div role="progressbar" aria-label="Profile progress" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-1.5 overflow-hidden rounded-full bg-cream">
-          <div className="h-full rounded-full bg-gold transition-[width] duration-500" style={{ width: `${percent}%` }} />
-        </div>
-        <ol className="mt-4 flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
-          {STEPS.map((s, i) => {
-            const current = s.key === step;
-            const complete = s.key !== "review" && !state.missing.some((m) => m.step === s.key);
-            return (
-              <li key={s.key} className="shrink-0">
-                <button
-                  type="button"
-                  onClick={() => saveNow(() => moveTo(s.key))}
-                  aria-current={current ? "step" : undefined}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors lg:py-2.5 ${current ? "bg-white shadow-sm ring-1 ring-line" : "hover:bg-white/60"}`}
-                >
-                  <span className={`grid size-7 shrink-0 place-items-center rounded-full font-display text-xs font-semibold ${complete ? "bg-emerald-600 text-white" : current ? "bg-ink text-white" : "bg-cream text-muted"}`}>
-                    {complete ? <Check className="size-4" aria-hidden /> : i + 1}
-                  </span>
-                  <span className="min-w-0">
-                    <span className={`block whitespace-nowrap font-display text-sm font-semibold ${current ? "text-ink" : "text-ink-soft"}`}>{s.label}</span>
-                    <span className="hidden text-xs text-muted lg:block">{s.hint}</span>
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </aside>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-10">
+      <HideFooter />
+      <StepRail
+        steps={STEPS.map((s) => ({ ...s, complete: s.key !== "review" && !state.missing.some((m) => m.step === s.key) }))}
+        current={step}
+        percent={percent}
+        status={percent === 100 ? "Ready to send" : `${percent}% complete`}
+        onSelect={(key) => saveNow(() => moveTo(key as Step))}
+      />
 
       <div className="min-w-0">
         {state.status === "REJECTED" && (
@@ -216,7 +184,7 @@ function Wizard({ state }: { state: OnboardingState }) {
           {step === "review" && <Review state={state} onFix={(s) => saveNow(() => moveTo(s))} />}
         </div>
 
-        <div className="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-3 border-t border-line bg-cream-soft/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-t-lg sm:px-0">
+        <ActionBar>
           <button type="button" disabled={index === 0} onClick={() => saveNow(() => moveTo(STEPS[index - 1]!.key))} className="btn btn-outline btn-sm disabled:invisible">
             <ArrowLeft aria-hidden />
             Back
@@ -230,7 +198,7 @@ function Wizard({ state }: { state: OnboardingState }) {
               <ArrowRight aria-hidden />
             </button>
           )}
-        </div>
+        </ActionBar>
       </div>
     </div>
   );
@@ -243,25 +211,6 @@ function Panel({ title, hint, children }: { title: string; hint: string; childre
       <p className="mt-1 text-sm text-muted">{hint}</p>
       <div className="mt-6">{children}</div>
     </section>
-  );
-}
-
-type Control = { id: string; "aria-invalid": boolean; "aria-describedby": string | undefined };
-
-function Field({ label, optional, hint, error, count, className = "", children }: { label: string; optional?: boolean; hint?: string; error?: string; count?: string; className?: string; children: (control: Control) => ReactNode }) {
-  const id = useId();
-  const note = `${id}-note`;
-  return (
-    <div className={className}>
-      <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <label htmlFor={id} className="text-sm font-medium text-ink">
-          {label} {optional && <span className="font-normal text-muted">(optional)</span>}
-        </label>
-        {count && <span className="text-xs tabular-nums text-muted">{count}</span>}
-      </div>
-      {children({ id, "aria-invalid": Boolean(error), "aria-describedby": error || hint ? note : undefined })}
-      {error ? <p id={note} className="mt-1.5 text-xs text-rose-700">{error}</p> : hint ? <p id={note} className="mt-1.5 text-xs text-muted">{hint}</p> : null}
-    </div>
   );
 }
 

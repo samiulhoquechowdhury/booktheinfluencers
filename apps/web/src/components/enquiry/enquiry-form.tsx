@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useWatch, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, LoaderCircle, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, CloudCheck, LoaderCircle, Plus, Search, X } from "lucide-react";
 import { dateClashMessage, EnquiryInputSchema, type EnquiryFormValues, type EnquiryInput } from "@repo/schemas";
 import { formatDate, toIstDateKey } from "@repo/utils";
 import { BUDGET_BANDS, CITIES, EVENT_TYPES, LANGUAGES } from "@repo/mock/catalogue/data";
@@ -17,12 +17,18 @@ import { feeBand } from "@/lib/format";
 import { OtpForm } from "@/components/auth/otp-form";
 import { isUploaded, photoAt } from "@/lib/photo";
 import { AvailabilityCalendar } from "@/components/talent/availability-calendar";
+import { ActionBar, Choices, HideFooter, StepRail, showFirstProblem } from "@/components/ui/form-steps";
 
 const STEPS = [
-  { title: "Your event", fields: ["eventType", "eventDate", "altDate", "city", "venue", "audienceSize", "durationMins", "language"] },
-  { title: "Artists & budget", fields: ["talentSlugs", "budgetBand", "notes"] },
-  { title: "Your details", fields: ["contactName", "phone", "email", "companyName", "gstin"] },
-] as const satisfies readonly { title: string; fields: readonly FieldPath<EnquiryFormValues>[] }[];
+  { title: "Your event", hint: "When, where and what", fields: ["eventType", "eventDate", "altDate", "city", "venue", "audienceSize", "durationMins", "language"] },
+  { title: "Artists & budget", hint: "Who you'd like", fields: ["talentSlugs", "budgetBand", "notes"] },
+  { title: "Your details", hint: "How we reach you", fields: ["contactName", "phone", "email", "companyName", "gstin"] },
+] as const satisfies readonly { title: string; hint: string; fields: readonly FieldPath<EnquiryFormValues>[] }[];
+
+/** The event part of a brief is kept on this device, so a reload doesn't lose it. Contact details aren't stored. */
+const DRAFT_KEY = "enquiry-draft";
+const DRAFT_FIELDS = ["eventType", "eventDate", "altDate", "city", "venue", "audienceSize", "durationMins", "language", "budgetBand", "notes"] as const;
+const DURATIONS = [30, 45, 60, 90, 120, 180].map((mins) => ({ value: mins, label: mins < 60 ? `${mins} min` : `${mins / 60} hr${mins > 60 ? "s" : ""}` }));
 
 const MAX_TALENTS = 5;
 const inputClass =
@@ -58,11 +64,45 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
       gstin: "",
     },
   });
-  const { register, formState, trigger, control, setValue, getValues, handleSubmit, setError, reset } = form;
+  const { register, formState, trigger, control, setValue, getValues, handleSubmit, setError, reset, watch } = form;
   const errors = formState.errors;
   const selected = useWatch({ control, name: "talentSlugs" }) ?? [];
   const eventDate = useWatch({ control, name: "eventDate" });
   const altDate = useWatch({ control, name: "altDate" });
+  const values = useWatch({ control });
+
+  useEffect(() => {
+    try {
+      const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") as Partial<EnquiryFormValues> | null;
+      if (!draft) return;
+      const fresh = (date: string | undefined) => (date && date >= today ? date : "");
+      reset({ ...getValues(), ...draft, eventDate: fresh(draft.eventDate), altDate: fresh(draft.altDate) });
+    } catch {
+      // Nothing usable saved.
+    }
+  }, [getValues, reset, today]);
+
+  // Only what the customer changes is saved (`name` is empty for a reset), so restoring can't overwrite the draft.
+  useEffect(() => {
+    const { unsubscribe } = watch((current, { name }) => {
+      if (!name) return;
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(Object.fromEntries(DRAFT_FIELDS.map((field) => [field, current[field]]))));
+      } catch {
+        // Storage full or blocked: the form still works, it just won't survive a reload.
+      }
+    });
+    return unsubscribe;
+  }, [watch]);
+
+  // Signed-in customers don't retype what we already know.
+  useEffect(() => {
+    if (!session) return;
+    if (!getValues("contactName") && session.name !== "Guest") setValue("contactName", session.name);
+    if (!getValues("phone")) setValue("phone", session.phone);
+    if (!getValues("email") && session.email) setValue("email", session.email);
+  }, [session, getValues, setValue]);
+
   const shortlist = useTalentSummaries(selected);
   const calendars = useQueries({ queries: selected.map(blockedDatesQuery) });
 
@@ -84,6 +124,11 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
       void client.invalidateQueries({ queryKey: keys.bookings });
       // The confirmation is its own page. Next.js keeps this form alive between visits, so it must be left ready for
       // the customer's next booking, with their contact details kept and the event cleared.
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // Blocked storage: there was no draft to clear.
+      }
       reset({ ...getValues(), eventType: "", eventDate: "", altDate: "", city: "", venue: "", audienceSize: undefined, durationMins: undefined, language: "", budgetBand: "", notes: "" });
       setStep(0);
       setVerifying(false);
@@ -108,8 +153,13 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
     if (await trigger([...STEPS[step]!.fields])) {
       setStep((s) => s + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      showFirstProblem();
     }
   };
+
+  const choose = <K extends "eventType" | "city" | "durationMins" | "budgetBand">(name: K, value: EnquiryFormValues[K]) => setValue(name, value as never, { shouldValidate: true, shouldDirty: true });
+  const problem = (name: "eventType" | "city" | "budgetBand") => errors[name]?.message;
 
   /** Signed-in customers with the same number skip OTP; everyone else verifies first (ENQ-4). */
   const onFinalSubmit = handleSubmit((values) => {
@@ -139,19 +189,20 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
   );
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[1fr_320px]">
-      <div>
-        <ol className="mb-8 flex gap-2" aria-label="Progress">
-          {STEPS.map((s, index) => (
-            <li key={s.title} className="flex-1" aria-current={index === step ? "step" : undefined}>
-              <span className={`block h-1 rounded-full ${index <= step ? "bg-gold" : "bg-line"}`} />
-              <span className={`mt-2 block font-display text-xs font-semibold ${index === step ? "text-ink" : "text-muted"}`}>
-                {index + 1}. {s.title}
-              </span>
-            </li>
-          ))}
-        </ol>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
+      <HideFooter />
+      <StepRail
+        steps={STEPS.map((s, index) => ({ key: s.title, label: s.title, hint: s.hint, complete: index < step }))}
+        current={STEPS[step]!.title}
+        percent={Math.round((step / STEPS.length) * 100)}
+        status={`${Math.round((step / STEPS.length) * 100)}% complete`}
+        onSelect={(key) => {
+          const target = STEPS.findIndex((s) => s.title === key);
+          if (target < step && !verifying) setStep(target); // going forward goes through Continue, which checks the step
+        }}
+      />
 
+      <div className="min-w-0">
         {/*
           Not a <form>: the phone sign-in at the end (OtpForm) is its own form, and a form inside a form makes
           browsers submit the outer one natively, reloading the page and wiping the brief. Enter still moves on.
@@ -170,16 +221,9 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
           {step === 0 && (
             <fieldset className="grid gap-5 sm:grid-cols-2">
               <legend className="mb-5 font-serif text-2xl font-semibold text-ink">Tell us about your event</legend>
-              <label className="sm:col-span-2">
-                {label("Event type")}
-                <select {...register("eventType")} {...aria("eventType")} className={inputClass}>
-                  <option value="">Choose…</option>
-                  {EVENT_TYPES.map((type) => (
-                    <option key={type}>{type}</option>
-                  ))}
-                </select>
-                {error("eventType")}
-              </label>
+              <div className="sm:col-span-2">
+                <Choices label="What's the occasion?" options={EVENT_TYPES.map((type) => ({ value: type as string, label: type }))} value={values.eventType} onChange={(v) => choose("eventType", v)} error={problem("eventType")} />
+              </div>
               <label>
                 {label("Event date")}
                 <input type="date" min={today} {...register("eventDate")} {...aria("eventDate")} className={inputClass} />
@@ -201,17 +245,9 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
                   />
                 </div>
               )}
-              <label>
-                {label("City")}
-                <select {...register("city")} {...aria("city")} className={inputClass}>
-                  <option value="">Choose…</option>
-                  {CITIES.map((city) => (
-                    <option key={city.slug}>{city.name}</option>
-                  ))}
-                  <option>Other</option>
-                </select>
-                {error("city")}
-              </label>
+              <div className="sm:col-span-2">
+                <Choices label="City" options={[...CITIES.map((city) => ({ value: city.name as string, label: city.name })), { value: "Other", label: "Other" }]} value={values.city} onChange={(v) => choose("city", v)} error={problem("city")} />
+              </div>
               <label>
                 {label("Venue", true)}
                 <input {...register("venue")} placeholder="Hotel, lawn, auditorium…" className={inputClass} />
@@ -222,17 +258,6 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
                 {error("audienceSize")}
               </label>
               <label>
-                {label("Performance length", true)}
-                <select {...register("durationMins", { setValueAs: optionalNumber })} className={inputClass}>
-                  <option value="">Not sure yet</option>
-                  {[30, 45, 60, 90, 120, 180].map((mins) => (
-                    <option key={mins} value={mins}>
-                      {mins < 60 ? `${mins} min` : `${mins / 60} hr${mins > 60 ? "s" : ""}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="sm:col-span-2">
                 {label("Preferred language", true)}
                 <select {...register("language")} className={inputClass}>
                   <option value="">No preference</option>
@@ -241,6 +266,9 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
                   ))}
                 </select>
               </label>
+              <div className="sm:col-span-2">
+                <Choices label="Performance length" optional options={DURATIONS} value={values.durationMins as number | undefined} onChange={(v) => choose("durationMins", (values.durationMins === v ? undefined : v) as never)} hint="Not sure yet? Leave this and we'll work it out together." />
+              </div>
             </fieldset>
           )}
 
@@ -253,18 +281,7 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
                 onChange={(slugs) => setValue("talentSlugs", slugs, { shouldValidate: true })}
               />
               {error("talentSlugs")}
-              <label>
-                {label("Total budget for the artist(s)")}
-                <select {...register("budgetBand")} {...aria("budgetBand")} className={inputClass}>
-                  <option value="">Choose a range…</option>
-                  {BUDGET_BANDS.map((band) => (
-                    <option key={band.id} value={band.id}>
-                      {band.label}
-                    </option>
-                  ))}
-                </select>
-                {error("budgetBand")}
-              </label>
+              <Choices wide label="Total budget for the artist(s)" options={BUDGET_BANDS.map((band) => ({ value: band.id as string, label: band.label }))} value={values.budgetBand} onChange={(v) => choose("budgetBand", v)} error={problem("budgetBand")} />
               <label>
                 {label("Anything else we should know?", true)}
                 <textarea
@@ -347,39 +364,56 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
             </div>
           )}
 
-          {!verifying && (
-            <div className="mt-8 flex items-center justify-between gap-3 border-t border-line pt-6">
-              {step > 0 ? (
-                <button type="button" onClick={() => setStep((s) => s - 1)} className="btn btn-outline">
-                  <ArrowLeft aria-hidden />
-                  Back
-                </button>
-              ) : (
-                <span />
-              )}
-              {step < STEPS.length - 1 ? (
-                <button type="button" onClick={next} className="btn btn-dark">
-                  Continue
-                  <ArrowRight aria-hidden />
-                </button>
-              ) : (
-                <button type="button" onClick={onFinalSubmit} disabled={submit.isPending} className="btn btn-gold disabled:opacity-60">
-                  {submit.isPending && <LoaderCircle className="animate-spin" aria-hidden />}
-                  Send brief
-                  {!submit.isPending && <ArrowRight aria-hidden />}
-                </button>
-              )}
-            </div>
-          )}
           {submit.isError && !verifying && (
             <p role="alert" className="mt-4 text-sm text-rose-700">
               {errorMessage(submit.error)}
             </p>
           )}
         </div>
+
+        {!verifying && (
+          <ActionBar>
+            {step > 0 ? (
+              <button type="button" onClick={() => setStep((s) => s - 1)} className="btn btn-outline btn-sm">
+                <ArrowLeft aria-hidden />
+                Back
+              </button>
+            ) : (
+              <span />
+            )}
+            <p className="flex items-center gap-1.5 text-xs text-muted">
+              <CloudCheck className="size-3.5" aria-hidden />
+              <span className="sm:hidden">Saved</span>
+              <span className="hidden sm:inline">Saved on this device</span>
+            </p>
+            {step < STEPS.length - 1 ? (
+              <button type="button" onClick={next} className="btn btn-gold btn-sm">
+                Continue
+                <ArrowRight aria-hidden />
+              </button>
+            ) : (
+              <button type="button" onClick={onFinalSubmit} disabled={submit.isPending} className="btn btn-gold btn-sm disabled:opacity-60">
+                {submit.isPending && <LoaderCircle className="animate-spin" aria-hidden />}
+                Send brief
+                {!submit.isPending && <ArrowRight aria-hidden />}
+              </button>
+            )}
+          </ActionBar>
+        )}
       </div>
 
-      <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
+      <aside className="min-w-0 space-y-4 lg:col-start-2 xl:sticky xl:top-24 xl:col-start-3 xl:row-start-1 xl:self-start">
+        <BriefSummary
+          rows={[
+            ["Occasion", values.eventType],
+            ["Date", values.eventDate && formatDate(`${values.eventDate}T12:00:00+05:30`)],
+            ["Alternate", values.altDate && formatDate(`${values.altDate}T12:00:00+05:30`)],
+            ["City", values.city],
+            ["Length", DURATIONS.find((d) => d.value === values.durationMins)?.label],
+            ["Artists", shortlist.data?.filter((t) => selected.includes(t.slug)).map((t) => t.stageName).join(", ")],
+            ["Budget", BUDGET_BANDS.find((band) => band.id === values.budgetBand)?.label],
+          ]}
+        />
         <div className="rounded-card bg-ink p-6 text-white">
           <p className="eyebrow text-warm">What happens next</p>
           <ol className="mt-4 space-y-3 text-sm text-white/80">
@@ -395,6 +429,27 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
         </p>
       </aside>
     </div>
+  );
+}
+
+function BriefSummary({ rows }: { rows: [string, string | undefined | false][] }) {
+  const filled = rows.filter(([, value]) => value);
+  return (
+    <section className="rounded-card border border-line bg-white p-5">
+      <h2 className="font-display text-sm font-semibold text-ink">Your brief</h2>
+      {filled.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">Your choices will appear here as you go.</p>
+      ) : (
+        <dl className="mt-3 space-y-2 text-sm">
+          {filled.map(([label, value]) => (
+            <div key={label} className="flex justify-between gap-4">
+              <dt className="shrink-0 text-muted">{label}</dt>
+              <dd className="text-right font-medium text-ink">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
   );
 }
 
