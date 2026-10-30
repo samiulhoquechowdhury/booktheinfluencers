@@ -31,7 +31,7 @@ export function customerStatus(booking: CustomerBooking): BookingStatus {
     };
   }
   if (booking.availability === "UNAVAILABLE") {
-    return { label: "Unavailable", tone: "danger", hint: "Your manager will suggest similar artists." };
+    return { label: "Unavailable", tone: "danger", hint: "This artist isn't available on your date. See their free dates, or your manager will suggest similar artists." };
   }
   if (accepted) {
     return { label: "Finish booking", tone: "action", hint: "Sign the contract and pay the advance to confirm." };

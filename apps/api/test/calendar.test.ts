@@ -129,6 +129,54 @@ describe("calendar (AVL-4, TAL-3)", () => {
     expect(after.body.all).not.toContain(date);
   });
 
+  it("gives a contested date to whoever confirms first, and tells the other customer", async () => {
+    tokens.other = await signInCustomer(app, randomPhone(), "Second Customer");
+    const date = freshDate();
+
+    /** One customer's brief, taken as far as paying the advance. */
+    const toAdvance = async (who: string) => {
+      const res = await http().post("/v1/enquiries").set(as(who)).send({ eventType: "Wedding", eventDate: date, city: "Mumbai", budgetBand: "1l-3l", talentSlugs: ["arjun-sethi"], contactName: "Contested", phone: "9876522222" }).expect(201);
+      const lead = await db.lead.findUniqueOrThrow({ where: { id: res.body.leadId }, include: { bookings: true } });
+      const bookingId = lead.bookings[0]!.id;
+      await act("sales", bookingId, "startAvailabilityCheck").expect(204);
+      await act("talent", bookingId, "markAvailable").expect(204);
+      await act("talent", bookingId, "recordRepAcceptance").expect(204);
+      const draft = await http().get(`/v1/admin/bookings/${bookingId}/quote-draft`).set(as("sales")).expect(200);
+      const quote = await http().post(`/v1/admin/bookings/${bookingId}/quotes`).set(as("sales")).send(draft.body).expect(201);
+      await http().post(`/v1/quotes/${quote.body.id}/accept`).set(as(who)).expect(204);
+      await act("sales", bookingId, "sendContract").expect(204);
+      const contract = await db.contract.findFirstOrThrow({ where: { bookingId } });
+      await sendWebhook(app, "esign", { eventId: `evt_race_${bookingId}`, contractId: contract.id, signedName: "Contested" }).expect(200);
+      const advance = await db.paymentMilestone.findFirstOrThrow({ where: { bookingId, isAdvance: true } });
+      return { leadId: lead.id, bookingId, advance };
+    };
+    const pay = (advanceId: string) => http().post(`/v1/admin/milestones/${advanceId}/manual-payment`).set(as("accounts")).send({ reference: `UTR${advanceId.slice(-8)}` });
+
+    const first = await toAdvance("customer");
+    const second = await toAdvance("other");
+    await pay(first.advance.id).expect(204);
+
+    // First is confirmed, and everyone can see the date is booked.
+    expect(await db.booking.findUniqueOrThrow({ where: { id: first.bookingId } })).toMatchObject({ availability: "CONFIRMED" });
+    const open = await http().get("/v1/talents/arjun-sethi/blocked-dates").expect(200);
+    expect(open.body.booked).toContain(date);
+    const third = await enquire(["arjun-sethi"], date).expect(409);
+    expect(third.body.error.message).toMatch(/^Arjun Sethi is already booked on/);
+
+    // Second is told straight away and can't pay online.
+    expect(await db.booking.findUniqueOrThrow({ where: { id: second.bookingId } })).toMatchObject({ availability: "UNAVAILABLE", confirmedAt: null });
+    expect(await db.notification.count({ where: { event: "booking.dateTaken", leadId: second.leadId } })).toBeGreaterThan(0);
+    const refused = await http().post(`/v1/milestones/${second.advance.id}/checkout`).set(as("other")).expect(409);
+    expect(refused.body.error.code).toBe("DATE_TAKEN");
+
+    // Money arriving anyway (a bank transfer) still can't double-book. The team is told to sort it out.
+    await pay(second.advance.id).expect(204);
+    expect(await db.booking.findUniqueOrThrow({ where: { id: second.bookingId } })).toMatchObject({ availability: "UNAVAILABLE", confirmedAt: null });
+    expect(await db.activity.count({ where: { leadId: second.leadId, internal: true, title: { contains: "date already booked" } } })).toBe(1);
+
+    await act("sales", first.bookingId, "cancelBooking", "Test finished").expect(204);
+  });
+
   it("keeps the budget filter when searching by keyword", async () => {
     const all = await http().get("/v1/talents").query({ q: "singer" }).expect(200);
     const capped = await http().get("/v1/talents").query({ q: "singer", budget: "under-1l" }).expect(200);

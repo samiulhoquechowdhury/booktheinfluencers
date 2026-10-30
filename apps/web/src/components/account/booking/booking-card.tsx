@@ -53,6 +53,12 @@ export function BookingCard({ leadId, booking }: { leadId: string; booking: Cust
         </div>
       )}
 
+      {booking.availability === "UNAVAILABLE" && !booking.cancelledAt && (
+        <Link href={`/talent/${booking.talent.slug}#availability`} className="btn btn-outline btn-sm mt-4">
+          See free dates
+        </Link>
+      )}
+
       {booking.availability !== "UNAVAILABLE" && (
         <div className="mt-5 grid gap-4">
           <QuotePanel leadId={leadId} quotes={booking.quotes} cancelled={Boolean(booking.cancelledAt)} />

@@ -3,11 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm, useWatch, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Plus, Search, X } from "lucide-react";
-import { EnquiryInputSchema, type EnquiryFormValues, type EnquiryInput } from "@repo/schemas";
+import { ArrowLeft, ArrowRight, LoaderCircle, Plus, Search, X } from "lucide-react";
+import { dateClashMessage, EnquiryInputSchema, type EnquiryFormValues, type EnquiryInput } from "@repo/schemas";
 import { formatDate, toIstDateKey } from "@repo/utils";
 import { BUDGET_BANDS, CITIES, EVENT_TYPES, LANGUAGES } from "@repo/mock/catalogue/data";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
@@ -15,6 +16,7 @@ import { blockedDatesQuery, keys, useSession, useTalentSearch, useTalentSummarie
 import { feeBand } from "@/lib/format";
 import { OtpForm } from "@/components/auth/otp-form";
 import { isUploaded, photoAt } from "@/lib/photo";
+import { AvailabilityCalendar } from "@/components/talent/availability-calendar";
 
 const STEPS = [
   { title: "Your event", fields: ["eventType", "eventDate", "altDate", "city", "venue", "audienceSize", "durationMins", "language"] },
@@ -33,7 +35,7 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
   const { data: session } = useSession();
   const [step, setStep] = useState(0);
   const [verifying, setVerifying] = useState(false);
-  const [done, setDone] = useState<{ ref: string; leadId: string } | null>(null);
+  const router = useRouter();
   const today = useMemo(() => toIstDateKey(new Date()), []);
 
   const form = useForm<EnquiryFormValues, unknown, EnquiryInput>({
@@ -56,7 +58,7 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
       gstin: "",
     },
   });
-  const { register, formState, trigger, control, setValue, getValues, handleSubmit, setError } = form;
+  const { register, formState, trigger, control, setValue, getValues, handleSubmit, setError, reset } = form;
   const errors = formState.errors;
   const selected = useWatch({ control, name: "talentSlugs" }) ?? [];
   const eventDate = useWatch({ control, name: "eventDate" });
@@ -65,21 +67,27 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
   const calendars = useQueries({ queries: selected.map(blockedDatesQuery) });
 
   /** Who on the shortlist can't do this date, so the customer finds out now, not after filling in the whole brief. */
-  const blockedOn = (date: string | undefined) => (date ? selected.filter((_, i) => calendars[i]?.data?.includes(date)) : []);
+  const blockedOn = (date: string | undefined) => (date ? selected.filter((_, i) => calendars[i]?.data?.dates.includes(date)) : []);
   const clash = (date: string | undefined) => {
     const slugs = blockedOn(date);
     if (slugs.length === 0) return null;
     const names = slugs.map((slug) => shortlist.data?.find((t) => t.slug === slug)?.stageName ?? "This artist");
-    const who = names.length === 1 ? `${names[0]} isn't` : `${names.slice(0, -1).join(", ")} and ${names.at(-1)} aren't`;
-    return `${who} available on ${formatDate(`${date}T12:00:00+05:30`)}. Pick another date or remove them from the shortlist.`;
+    const allBooked = slugs.every((slug) => calendars[selected.indexOf(slug)]?.data?.booked.includes(date!));
+    return dateClashMessage(names, formatDate(`${date}T12:00:00+05:30`), allBooked);
   };
+  // The date to fix first, with the calendar of free days that goes with it.
+  const clashing = clash(eventDate) ? { field: "eventDate" as const, date: eventDate } : clash(altDate) ? { field: "altDate" as const, date: altDate! } : null;
 
   const submit = useMutation({
     mutationFn: (values: EnquiryInput) => api.enquiries.submit(values),
     onSuccess: (result) => {
       void client.invalidateQueries({ queryKey: keys.bookings });
-      setDone(result);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      // The confirmation is its own page. Next.js keeps this form alive between visits, so it must be left ready for
+      // the customer's next booking, with their contact details kept and the event cleared.
+      reset({ ...getValues(), eventType: "", eventDate: "", altDate: "", city: "", venue: "", audienceSize: undefined, durationMins: undefined, language: "", budgetBand: "", notes: "" });
+      setStep(0);
+      setVerifying(false);
+      router.push(`/enquiry/received?ref=${encodeURIComponent(result.ref)}&lead=${encodeURIComponent(result.leadId)}`);
     },
     // AVL-4: an artist is blocked on that date — take the customer back to the date with the reason.
     onError: (error) => {
@@ -108,8 +116,6 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
     if (session?.roles.includes("CUSTOMER") && session.phone === values.phone) submit.mutate(values);
     else setVerifying(true);
   });
-
-  if (done) return <Success refNo={done.ref} leadId={done.leadId} />;
 
   const error = (name: FieldPath<EnquiryFormValues>) => {
     const message = name.split(".").reduce<unknown>((obj, key) => (obj as Record<string, unknown>)?.[key], errors) as
@@ -184,6 +190,17 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
                 <input type="date" min={today} {...register("altDate")} {...aria("altDate")} className={inputClass} />
                 {clash(altDate) ? <p role="alert" className="mt-1.5 text-xs text-rose-700">{clash(altDate)}</p> : error("altDate")}
               </label>
+              {clashing && (
+                <div className="sm:col-span-2">
+                  <AvailabilityCalendar
+                    key={blockedOn(clashing.date).join()}
+                    slugs={blockedOn(clashing.date)}
+                    start={clashing.date}
+                    heading="Choose a date they're free"
+                    onPick={(date) => setValue(clashing.field, date, { shouldValidate: true })}
+                  />
+                </div>
+              )}
               <label>
                 {label("City")}
                 <select {...register("city")} {...aria("city")} className={inputClass}>
@@ -470,31 +487,6 @@ function TalentPicker({ selected, unavailable, onChange }: { selected: string[];
         </div>
       )}
       <p className="mt-2 text-xs text-muted">Up to {MAX_TALENTS} artists. We'll check each one's date separately.</p>
-    </div>
-  );
-}
-
-function Success({ refNo, leadId }: { refNo: string; leadId: string }) {
-  return (
-    <div className="mx-auto max-w-xl rounded-card border border-line bg-white p-8 text-center shadow-card sm:p-10">
-      <CheckCircle2 className="mx-auto size-14 text-emerald-600" aria-hidden />
-      <h2 className="mt-5 font-serif text-3xl font-semibold text-ink">Brief received</h2>
-      <p className="mt-3 text-muted">Your reference number is</p>
-      <p className="mt-1 font-display text-2xl font-bold tracking-wide text-gold-deep">{refNo}</p>
-      <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-muted">
-        We've sent the same reference to your phone and email. A booking manager will call you shortly to go through the
-        details, then check each artist's availability.
-      </p>
-      <p className="mt-2 text-xs text-muted">(Demo mode: no SMS or email is actually sent.)</p>
-      <div className="mt-8 flex flex-wrap justify-center gap-3">
-        <Link href={`/account/bookings/${leadId}`} className="btn btn-dark">
-          Track this booking
-          <ArrowRight aria-hidden />
-        </Link>
-        <Link href="/talent" className="btn btn-outline">
-          Keep browsing
-        </Link>
-      </div>
     </div>
   );
 }

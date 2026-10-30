@@ -105,6 +105,7 @@ export class CustomerBookingsController {
       if (!quote) throw notFound("Quote");
       if (quote.status === "EXPIRED") throw new DomainError("QUOTE_EXPIRED", "This quote has expired — ask your manager for a fresh one", 409);
       if (quote.status !== "SENT") throw new DomainError("QUOTE_NOT_OPEN", "This quote can no longer be accepted", 409);
+      if (quote.booking.availability === "UNAVAILABLE") throw new DomainError("DATE_TAKEN", "This artist is no longer available on your date", 409);
       await tx.quote.update({ where: { id }, data: { status: "ACCEPTED", acceptedAt: new Date(), acceptedByUserId: user.id } });
       await createMilestones(tx, quote, quote.booking.lead.eventDate);
       if (quote.booking.lead.stage === "QUOTE_SENT" || quote.booking.lead.stage === "NEGOTIATION") {
@@ -139,6 +140,7 @@ export class CustomerBookingsController {
     if (!milestone) throw notFound("Payment");
     if (milestone.status === "PAID") throw new DomainError("ALREADY_PAID", "This payment is already complete", 409);
     if (milestone.status === "CANCELLED") throw new DomainError("CANCELLED", "This payment was cancelled", 409);
+    if (milestone.booking.availability === "UNAVAILABLE") throw new DomainError("DATE_TAKEN", "This artist is no longer available on your date", 409);
     if (!milestone.isAdvance && !milestone.booking.contracts.some((c) => c.status === "SIGNED")) {
       throw new DomainError("CONTRACT_PENDING", "Sign the contract before paying the balance", 409);
     }

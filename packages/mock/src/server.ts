@@ -1,3 +1,4 @@
+import { dateClashMessage } from "@repo/schemas";
 import type { CalendarEntry, EnquiryInput, TalentCalendar } from "@repo/schemas";
 import {
   canTransition,
@@ -107,6 +108,13 @@ export function evaluateConfirmation(db: MockDb, booking: BookingRec) {
   };
   if (!isConfirmable(facts) || !quote) return;
 
+  const lead = must(leadOf(db, booking.leadId), "Lead");
+  const held = db.calendar[booking.talentSlug]?.find((r) => r.date === lead.eventDate);
+  if (held?.bookingId && held.bookingId !== booking.id) {
+    activity(db, lead.id, `Can't confirm ${talentName(booking.talentSlug)}: date already booked`, "Another customer confirmed this date first. Refund the advance or move this booking to another date.", true);
+    return;
+  }
+
   const payout = quote.lineItems.find((line) => line.type === "TALENT_FEE")?.internalCostPaise ?? "0";
   booking.availability = "CONFIRMED";
   booking.confirmedAt = nowIso();
@@ -114,8 +122,8 @@ export function evaluateConfirmation(db: MockDb, booking: BookingRec) {
   booking.payoutTotalPaise = payout;
   booking.marginPaise = String(BigInt(quote.subtotalPaise) - BigInt(quote.internalCostPaise));
 
-  const lead = must(leadOf(db, booking.leadId), "Lead");
   holdDate(db, booking, lead);
+  closeRivals(db, booking, lead.eventDate);
   if (lead.stage === "ADVANCE_PENDING") transitionLead(db, lead, "CONFIRMED", { actor: "system" });
   activity(db, lead.id, `${talentName(booking.talentSlug)} is confirmed`, "Contract signed, advance received and the artist's team has accepted.");
 }
@@ -266,6 +274,7 @@ function ownQuote(db: MockDb, userId: string, quoteId: string) {
 export function acceptQuote(db: MockDb, userId: string, quoteId: string) {
   const { quote, booking, lead } = ownQuote(db, userId, quoteId);
   if (quote.status !== "SENT") throw new ApiError("QUOTE_NOT_OPEN", "This quote can no longer be accepted");
+  if (booking.availability === "UNAVAILABLE") throw new ApiError("DATE_TAKEN", "This artist is no longer available on your date");
   if (new Date(quote.validUntil).getTime() < Date.now()) {
     quote.status = "EXPIRED";
     throw new ApiError("QUOTE_EXPIRED", "This quote has expired — ask your manager for a fresh one");
@@ -291,8 +300,9 @@ export function requestQuoteChanges(db: MockDb, userId: string, quoteId: string,
 
 export function startCheckout(db: MockDb, userId: string, milestoneId: string) {
   const milestone = must(db.milestones.find((m) => m.id === milestoneId), "Payment");
-  ownBooking(db, userId, milestone.bookingId);
+  const { booking } = ownBooking(db, userId, milestone.bookingId);
   if (milestone.status === "PAID") throw new ApiError("ALREADY_PAID", "This payment is already complete");
+  if (booking.availability === "UNAVAILABLE") throw new ApiError("DATE_TAKEN", "This artist is no longer available on your date");
   const contract = contractOf(db, milestone.bookingId);
   if (!milestone.isAdvance && contract?.status !== "SIGNED") {
     throw new ApiError("CONTRACT_PENDING", "Sign the contract before paying the balance");
@@ -540,15 +550,27 @@ export function setCalendarDate(db: MockDb, slug: string, date: string, on: bool
 
 /** Throws when any of these talents has the date blocked, naming them. */
 export function assertDateOpen(db: MockDb, slugs: string[], date: string) {
-  const names = slugs.filter((slug) => isBlocked(db, slug, date)).map(talentName);
-  if (names.length === 0) return;
-  const who = names.length === 1 ? `${names[0]} isn't` : `${names.slice(0, -1).join(", ")} and ${names.at(-1)} aren't`;
-  throw new ApiError("DATE_BLOCKED", `${who} available on ${readableDate(date)}. Pick another date or remove them from the shortlist.`);
+  const clashes = slugs.filter((slug) => isBlocked(db, slug, date));
+  if (clashes.length === 0) return;
+  const allBooked = clashes.every((slug) => db.calendar[slug]?.some((r) => r.date === date && r.bookingId));
+  throw new ApiError("DATE_BLOCKED", dateClashMessage(clashes.map(talentName), readableDate(date), allBooked));
 }
 
 function holdDate(db: MockDb, booking: BookingRec, lead: LeadRec) {
   if (isBlocked(db, booking.talentSlug, lead.eventDate)) return;
   (db.calendar[booking.talentSlug] ??= []).push({ date: lead.eventDate, source: "booking", note: `Booked · ${lead.ref}`, bookingId: booking.id });
+}
+
+/** The first to confirm gets the date: other open requests for it are told now, before they pay. */
+export function closeRivals(db: MockDb, booking: BookingRec, date: string) {
+  const name = talentName(booking.talentSlug);
+  for (const rival of db.bookings) {
+    const lead = leadOf(db, rival.leadId);
+    if (rival.id === booking.id || rival.talentSlug !== booking.talentSlug || rival.cancelledAt || rival.confirmedAt || rival.availability === "UNAVAILABLE") continue;
+    if (!lead || lead.eventDate !== date || ["CLOSED", "LOST", "CANCELLED"].includes(lead.stage)) continue;
+    rival.availability = "UNAVAILABLE";
+    activity(db, lead.id, `${name} is no longer available`, `${name} has been booked for ${readableDate(date)}.`);
+  }
 }
 
 export function releaseDate(db: MockDb, bookingId: string) {

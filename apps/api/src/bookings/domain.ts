@@ -1,7 +1,8 @@
 import type { LeadStage, Prisma } from "@repo/db";
 import { canTransition, isConfirmable, splitIntoMilestones } from "@repo/utils";
 import { DomainError, notFound } from "../common/errors";
-import { notifyCustomer, notifyTalent } from "@repo/db";
+import { notifyCustomer, notifyStaff, notifyTalent } from "@repo/db";
+import { dateClashMessage } from "@repo/schemas";
 
 // Booking rules shared by customer, staff and webhook flows. Always called inside a transaction
 // (rules.md §3): `tx` is the transaction client.
@@ -58,14 +59,28 @@ export async function assertDateOpen(tx: Tx, talentIds: string[], date: string) 
   const rows = await tx.blackout.findMany({ where: { talentId: { in: talentIds }, date }, include: { talent: { select: { stageName: true } } } });
   if (rows.length === 0) return;
   const names = rows.map((r) => r.talent.stageName);
-  const who = names.length === 1 ? `${names[0]} isn't` : `${names.slice(0, -1).join(", ")} and ${names.at(-1)} aren't`;
-  throw new DomainError("DATE_BLOCKED", `${who} available on ${readableDate(date)}. Pick another date or remove them from the shortlist.`, 409, { field: "eventDate", talents: names });
+  throw new DomainError("DATE_BLOCKED", dateClashMessage(names, readableDate(date), rows.every((r) => r.bookingId)), 409, { field: "eventDate", talents: names });
 }
 
 /** A confirmed booking holds the artist's date, so they drop out of date searches and can't be double-booked. */
 async function holdDate(tx: Tx, booking: { id: string; talentId: string }, date: string, ref: string) {
   const existing = await tx.blackout.findUnique({ where: { talentId_date: { talentId: booking.talentId, date } } });
   if (!existing) await tx.blackout.create({ data: { talentId: booking.talentId, date, locked: true, bookingId: booking.id, note: `Booked · ${ref}` } });
+}
+
+/** The first to confirm gets the date: other open requests for it are told now, before they pay. */
+async function closeRivals(tx: Tx, booking: { id: string; talentId: string; talent: { stageName: string } }, date: string) {
+  const rivals = await tx.booking.findMany({
+    where: { id: { not: booking.id }, talentId: booking.talentId, cancelledAt: null, confirmedAt: null, availability: { not: "UNAVAILABLE" }, lead: { eventDate: date, stage: { notIn: ["CLOSED", "LOST", "CANCELLED"] } } },
+    include: { lead: true },
+  });
+  const name = booking.talent.stageName;
+  for (const rival of rivals) {
+    await tx.booking.update({ where: { id: rival.id }, data: { availability: "UNAVAILABLE" } });
+    await activity(tx, rival.leadId, `${name} is no longer available`, `${name} has been booked for ${readableDate(date)}.`);
+    await notifyCustomer(tx, rival.leadId, { event: "booking.dateTaken", subject: "That date has been taken", body: `${name} has been booked for ${readableDate(date)} by another customer. Pick another date from their calendar, or your manager will suggest similar artists.`, dedupeKey: `booking.dateTaken:${rival.id}` });
+    if (rival.lead.ownerId) await notifyStaff(tx, rival.lead.ownerId, { event: "booking.dateTaken", subject: `${rival.lead.ref}: ${name} was booked by someone else`, body: `${name} was confirmed on another booking for ${readableDate(date)}. Offer this customer another date or artist.`, leadId: rival.leadId });
+  }
 }
 
 /** Frees a date held by a booking that's cancelled. Blocks added by hand stay. */
@@ -87,6 +102,13 @@ export async function evaluateConfirmation(tx: Tx, bookingId: string) {
   });
   if (!confirmable || !quote) return;
 
+  // Two customers can reach this point for one date (money can come in by bank transfer). Only the first is confirmed.
+  const held = await tx.blackout.findUnique({ where: { talentId_date: { talentId: booking.talentId, date: booking.lead.eventDate } } });
+  if (held?.bookingId && held.bookingId !== booking.id) {
+    await activity(tx, booking.leadId, `Can't confirm ${booking.talent.stageName}: date already booked`, "Another customer confirmed this date first. Refund the advance or move this booking to another date.", true);
+    return;
+  }
+
   const payout = quote.lineItems.find((l) => l.type === "TALENT_FEE")?.internalCostPaise ?? 0n;
   await tx.booking.update({
     where: { id: booking.id },
@@ -99,6 +121,7 @@ export async function evaluateConfirmation(tx: Tx, bookingId: string) {
     },
   });
   await holdDate(tx, booking, booking.lead.eventDate, booking.lead.ref);
+  await closeRivals(tx, booking, booking.lead.eventDate);
   if (booking.lead.stage === "ADVANCE_PENDING") await transitionLead(tx, booking.leadId, "CONFIRMED", { actor: "system" });
   await activity(tx, booking.leadId, `${booking.talent.stageName} is confirmed`, "Contract signed, advance received and the artist's team has accepted.");
   await notifyCustomer(tx, booking.leadId, { event: "booking.confirmed", subject: "Your booking is confirmed", body: `${booking.talent.stageName} is confirmed for your event.` });

@@ -193,7 +193,7 @@ async function Profile({ params }: Pick<PageProps<"/talent/[slug]">, "params">) 
         </div>
 
         <div>
-          <AvailabilityCalendar slug={talent.slug} />
+          <AvailabilityCalendar slugs={[talent.slug]} />
 
           <h2 className="mt-10 font-serif text-2xl font-semibold text-ink">Recent events</h2>
           <ul className="mt-4 divide-y divide-line rounded-card border border-line bg-white">

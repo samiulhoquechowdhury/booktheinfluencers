@@ -468,7 +468,8 @@ export const mockApi = {
     blockedDates: (slug: string) =>
       call(() => {
         const today = toIstDateKey(new Date());
-        return calendarFor(loadDb(), slug).all.filter((date) => date >= today);
+        const open = calendarFor(loadDb(), slug).entries.filter((e) => e.date >= today);
+        return { dates: open.map((e) => e.date), booked: open.filter((e) => e.source === "booking").map((e) => e.date) };
       }),
     summaries: (slugs: string[]) => call(() => getTalentSummaries(slugs)),
     profile: (slug: string) =>

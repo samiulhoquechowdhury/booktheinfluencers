@@ -151,7 +151,7 @@ export class CatalogueController {
   async blockedDates(@Param("slug") slug: string) {
     const talent = await this.prisma.db.talent.findFirst({ where: { slug, ...LISTED }, select: { id: true } });
     if (!talent) throw notFound("Talent");
-    const rows = await this.prisma.db.blackout.findMany({ where: { talentId: talent.id, date: { gte: toIstDateKey(new Date()) } }, orderBy: { date: "asc" }, select: { date: true } });
-    return { dates: rows.map((r) => r.date) };
+    const rows = await this.prisma.db.blackout.findMany({ where: { talentId: talent.id, date: { gte: toIstDateKey(new Date()) } }, orderBy: { date: "asc" }, select: { date: true, bookingId: true } });
+    return { dates: rows.map((r) => r.date), booked: rows.filter((r) => r.bookingId).map((r) => r.date) };
   }
 }

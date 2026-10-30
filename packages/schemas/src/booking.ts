@@ -115,3 +115,11 @@ export const TalentBookingSchema = z.strictObject({
   payoutStatus: PayoutStatusSchema.nullable(),
 });
 export type TalentBooking = z.infer<typeof TalentBookingSchema>;
+
+/** "Aanya Kapoor is already booked on 3 Nov 2026…" for a confirmed booking; "isn't available" for any other block. */
+export function dateClashMessage(names: string[], on: string, allBooked: boolean) {
+  const one = names.length === 1;
+  const who = one ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+  const state = allBooked ? `${one ? "is" : "are"} already booked on ${on}` : `${one ? "isn't" : "aren't"} available on ${on}`;
+  return `${who} ${state}. Pick another date or remove them from the shortlist.`;
+}
