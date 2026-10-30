@@ -59,7 +59,7 @@ export async function TalentListing({ filters, basePath, locked = {} }: { filter
             />
           </div>
         ) : (
-          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3">
+          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {data.map((talent, index) => (
               <TalentCard key={talent.slug} talent={talent} priority={index < 3} />
             ))}
