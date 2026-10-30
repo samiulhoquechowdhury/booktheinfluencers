@@ -1,12 +1,12 @@
 "use client";
 
 import Image, { type StaticImageData } from "next/image";
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { PublicHeroSlide } from "@repo/schemas";
 import { publicHero } from "@repo/mock/site";
 import { loadDb, onExternalChange } from "@repo/mock/store";
 import { DEMO_MODE } from "@/lib/api/client";
-import { ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 /** The main slide's photo, imported statically for its blur placeholder (it's the first thing people see). */
 const BUNDLED_PATH = "/images/hero-main.jpg";
@@ -19,14 +19,13 @@ const useDemoSlides = () => {
   return useMemo(() => (json ? (JSON.parse(json) as PublicHeroSlide[]) : null), [json]);
 };
 
-/** How long each slide shows. The active dot fills over this time and advances the carousel when full. */
+/** How long each slide shows. */
 const INTERVAL_MS = 7000;
 const SWIPE_PX = 50;
-const pad = (n: number) => String(n).padStart(2, "0");
 
 /**
- * Full-bleed hero carousel. Loops forever; the active dot's progress bar is the timer, so hovering,
- * focusing or pressing pause freezes both together. Arrows, dots, ←/→ keys and swipes change slides.
+ * Full-bleed hero carousel. Loops forever, pausing while hovered or focused. Dots, ←/→ keys and swipes
+ * change slides.
  * With reduced motion the photos only cross-fade (no zoom, no slide-up).
  */
 export function HeroCarousel({ slides: served, bundled, children }: { slides: PublicHeroSlide[]; bundled: StaticImageData; children: ReactNode }) {
@@ -36,12 +35,18 @@ export function HeroCarousel({ slides: served, bundled, children }: { slides: Pu
   const active = picked % slides.length;
   const textRight = slides[active]?.textPosition === "right";
   const [hovered, setHovered] = useState(false);
-  const [stopped, setStopped] = useState(false);
   const many = slides.length > 1;
-  const running = many && !hovered && !stopped;
+  const running = many && !hovered;
   const touchX = useRef<number | null>(null);
 
   const go = useCallback((delta: number) => setPicked((i) => (i + delta + slides.length) % slides.length), [slides.length]);
+
+  // Restarts on every change of slide, so a picked slide gets its full time.
+  useEffect(() => {
+    if (!running) return;
+    const timer = setTimeout(() => go(1), INTERVAL_MS);
+    return () => clearTimeout(timer);
+  }, [running, picked, go]);
 
   return (
     <div
@@ -93,11 +98,11 @@ export function HeroCarousel({ slides: served, bundled, children }: { slides: Pu
       </div>
 
       {/* As tall as a 16:9 photo at full width (capped), so the picture shows whole on desktop. */}
-      <div className="flex min-h-[520px] items-center sm:min-h-[580px] lg:min-h-[min(50vw,780px)]">
+      <div className="relative flex min-h-[520px] items-center sm:min-h-[580px] lg:min-h-[min(50vw,780px)]">
         <div className="shell w-full pb-12 pt-14 lg:pb-16 lg:pt-20">
           <div className="[text-shadow:0_2px_18px_rgb(0_0_0/0.35)]">
             {/* Every slide's text sits in the same grid cell, so the block is as tall as the longest one. */}
-            <div className="grid" aria-live={stopped || hovered ? "polite" : "off"}>
+            <div className="grid" aria-live={hovered ? "polite" : "off"}>
               {slides.map((slide, i) => {
                 const Heading = i === 0 ? "h1" : "h2";
                 const shown = i === active;
@@ -139,67 +144,27 @@ export function HeroCarousel({ slides: served, bundled, children }: { slides: Pu
 
             <div className={`max-w-xl ${textRight ? "lg:ml-auto" : "xl:max-w-2xl"}`}>
               {children}
-
-              {many && (
-                <div className="mt-9 flex items-center gap-4">
-                  <p className="font-display text-sm tabular-nums text-white/70" aria-hidden>
-                    <span className="font-semibold text-white">{pad(active + 1)}</span> / {pad(slides.length)}
-                  </p>
-                  <div role="group" aria-label="Choose a slide" className="flex items-center gap-1.5">
-                    {slides.map((slide, i) => (
-                      <button
-                        key={slide.id}
-                        type="button"
-                        onClick={() => setPicked(i)}
-                        aria-label={`Show slide ${i + 1}: ${slide.title} ${slide.accent}`}
-                        aria-current={i === active}
-                        className="group grid h-7 place-items-center"
-                      >
-                        <span className={`relative block h-1 overflow-hidden rounded-full transition-all duration-500 ${i === active ? "w-12 bg-white/25" : "w-5 bg-white/30 group-hover:bg-white/60"}`}>
-                          {i === active && (
-                            // The fill is the timer: when it completes, the next slide shows.
-                            <span
-                              key={`${slide.id}-${picked}`}
-                              onAnimationEnd={() => go(1)}
-                              className="absolute inset-0 origin-left rounded-full bg-warm [animation:hero-progress_linear_forwards]"
-                              style={{ animationDuration: `${INTERVAL_MS}ms`, animationPlayState: running ? "running" : "paused" }}
-                            />
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="ml-auto flex items-center gap-2 sm:ml-2">
-                    <ControlButton label="Previous slide" onClick={() => go(-1)}>
-                      <ChevronLeft className="size-4" aria-hidden />
-                    </ControlButton>
-                    <ControlButton label="Next slide" onClick={() => go(1)}>
-                      <ChevronRight className="size-4" aria-hidden />
-                    </ControlButton>
-                    <ControlButton label={stopped ? "Play slideshow" : "Pause slideshow"} onClick={() => setStopped(!stopped)}>
-                      {stopped ? <Play className="size-3.5" aria-hidden /> : <Pause className="size-3.5" aria-hidden />}
-                    </ControlButton>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
+
+        {many && (
+          <div role="group" aria-label="Choose a slide" className="absolute inset-x-0 bottom-3 flex justify-center gap-1 sm:bottom-4">
+            {slides.map((slide, i) => (
+              <button
+                key={slide.id}
+                type="button"
+                onClick={() => setPicked(i)}
+                aria-label={`Show slide ${i + 1}: ${slide.title} ${slide.accent}`}
+                aria-current={i === active}
+                className="group grid size-7 cursor-pointer place-items-center"
+              >
+                <span className={`block size-2.5 rounded-full transition-colors duration-300 ${i === active ? "bg-warm" : "bg-white/50 group-hover:bg-white/80"}`} />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
-  );
-}
-
-function ControlButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="grid size-9 place-items-center rounded-full bg-white/10 text-white/80 ring-1 ring-inset ring-white/20 backdrop-blur-sm transition hover:bg-white/20 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-warm"
-    >
-      {children}
-    </button>
   );
 }

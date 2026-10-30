@@ -18,12 +18,3 @@ body {
   color: var(--foreground);
 }
 
-/* Hero carousel: the active dot fills over the slide's display time (components/home/hero-carousel.tsx). */
-@keyframes hero-progress {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
-}
