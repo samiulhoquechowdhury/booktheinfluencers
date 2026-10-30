@@ -13,6 +13,7 @@ import { CompareButton, CompareTray } from "@/components/talent/compare-button";
 import { TalentCard } from "@/components/talent/talent-card";
 import { Spinner } from "@/components/ui/feedback";
 import { isUploaded, photoAt } from "@/lib/photo";
+import { AvailabilityCalendar } from "@/components/talent/availability-calendar";
 
 export function generateStaticParams() {
   return TALENTS.map((talent) => ({ slug: talent.slug }));
@@ -192,7 +193,9 @@ async function Profile({ params }: Pick<PageProps<"/talent/[slug]">, "params">) 
         </div>
 
         <div>
-          <h2 className="font-serif text-2xl font-semibold text-ink">Recent events</h2>
+          <AvailabilityCalendar slug={talent.slug} />
+
+          <h2 className="mt-10 font-serif text-2xl font-semibold text-ink">Recent events</h2>
           <ul className="mt-4 divide-y divide-line rounded-card border border-line bg-white">
             {talent.pastEvents.map((event) => (
               <li key={`${event.title}-${event.year}`} className="flex items-center justify-between gap-4 px-5 py-4">

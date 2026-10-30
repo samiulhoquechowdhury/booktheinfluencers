@@ -36,6 +36,7 @@ export class CustomerBookingsController {
 
     return this.prisma.db.$transaction(async (tx) => {
       await assertDateOpen(tx, talents.map((t) => t.id), input.eventDate);
+      if (input.altDate) await assertDateOpen(tx, talents.map((t) => t.id), input.altDate);
       const ref = await nextRef(tx, "lead", `TB-${new Date().getFullYear()}-`);
       const lead = await tx.lead.create({
         data: {

@@ -2,6 +2,7 @@ import { Controller, Get, Inject, Param, Query } from "@nestjs/common";
 import { z } from "zod";
 import type { Prisma } from "@repo/db";
 import { TalentProfileSchema, TalentSummarySchema, type TalentProfile, type TalentSummary } from "@repo/schemas";
+import { toIstDateKey } from "@repo/utils";
 import { notFound } from "../common/errors";
 import { paise, parse } from "../common/validate";
 import { Public } from "../auth/guard";
@@ -142,5 +143,15 @@ export class CatalogueController {
     const talent = await this.prisma.db.talent.findFirst({ where: { slug, ...LISTED }, include: talentInclude });
     if (!talent) throw notFound("Talent");
     return toProfile(talent);
+  }
+
+  /** AVL-4: dates this artist can't take, for customers. Only the dates: never why, or who set them. */
+  @Public()
+  @Get("talents/:slug/blocked-dates")
+  async blockedDates(@Param("slug") slug: string) {
+    const talent = await this.prisma.db.talent.findFirst({ where: { slug, ...LISTED }, select: { id: true } });
+    if (!talent) throw notFound("Talent");
+    const rows = await this.prisma.db.blackout.findMany({ where: { talentId: talent.id, date: { gte: toIstDateKey(new Date()) } }, orderBy: { date: "asc" }, select: { date: true } });
+    return { dates: rows.map((r) => r.date) };
   }
 }

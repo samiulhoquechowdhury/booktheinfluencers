@@ -218,6 +218,7 @@ export const httpApi: typeof mockApi = {
       return slugs.flatMap((slug) => res.data.filter((t) => t.slug === slug));
     },
     profile: (slug) => request<TalentProfile>(`/talents/${encodeURIComponent(slug)}`, { auth: false }),
+    blockedDates: (slug) => request<{ dates: string[] }>(`/talents/${encodeURIComponent(slug)}/blocked-dates`, { auth: false }).then((r) => r.dates),
     search: async (q) => (await request<{ data: TalentSummary[] }>(`/talents?q=${encodeURIComponent(q)}`, { auth: false })).data.slice(0, 8),
   },
 

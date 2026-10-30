@@ -196,6 +196,7 @@ export function milestonesFor(quote: QuoteRec, lead: LeadRec, from = new Date())
 
 export function submitEnquiry(db: MockDb, customerId: string, input: EnquiryInput) {
   assertDateOpen(db, input.talentSlugs, input.eventDate);
+  if (input.altDate) assertDateOpen(db, input.talentSlugs, input.altDate);
   const band = BUDGET_BANDS.find((b) => b.id === input.budgetBand);
   const lead: LeadRec = {
     id: newId("lead"),

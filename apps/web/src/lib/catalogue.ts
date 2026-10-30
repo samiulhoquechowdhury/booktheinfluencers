@@ -13,14 +13,20 @@ export const CATALOGUE_FROM_API = Boolean(API_URL && process.env.NEXT_PUBLIC_API
 
 type Page = { data: TalentSummary[]; meta: { total: number; page: number; pageSize: number; pageCount: number } };
 
-async function apiGet<T>(path: string): Promise<T | null> {
-  const res = await fetch(`${API_URL}/v1${path}`, { headers: { accept: "application/json" } });
+async function apiGet<T>(path: string, init?: RequestInit): Promise<T | null> {
+  const res = await fetch(`${API_URL}/v1${path}`, { ...init, headers: { accept: "application/json" } });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Catalogue API ${path} failed with ${res.status}`);
   return (await res.json()) as T;
 }
 
 export async function listTalents(filters: TalentFilters, locked: LockedFilters = {}): Promise<Page> {
+  // A date search has to respect a date blocked a moment ago, so it never comes from the cache.
+  if (CATALOGUE_FROM_API && filters.date) return (await apiGet<Page>(`/talents${filtersToQuery({ ...filters, ...locked })}`, { cache: "no-store" }))!;
+  return cachedTalents(filters, locked);
+}
+
+async function cachedTalents(filters: TalentFilters, locked: LockedFilters): Promise<Page> {
   "use cache";
   cacheLife("minutes");
   if (!CATALOGUE_FROM_API) return searchTalents({ ...filters, ...locked });

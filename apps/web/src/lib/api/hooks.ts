@@ -29,6 +29,8 @@ export function useTalentProfile(slug: string | null | undefined) {
   return useQuery({ queryKey: ["catalogue", "profile", slug], queryFn: () => api.catalogue.profile(slug!), enabled: Boolean(slug), staleTime: 60_000 });
 }
 
+export const blockedDatesQuery = (slug: string) => ({ queryKey: ["catalogue", "blocked-dates", slug], queryFn: () => api.catalogue.blockedDates(slug), staleTime: 30_000 });
+
 export function useTalentSearch(q: string) {
   const term = q.trim();
   return useQuery({ queryKey: ["catalogue", "search", term], queryFn: () => api.catalogue.search(term), enabled: term.length > 0, staleTime: 60_000 });

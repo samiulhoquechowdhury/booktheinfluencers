@@ -35,6 +35,7 @@ import { loadDb, mutate, readSessionUserId, resetDb, writeSessionUserId } from "
 import type { MessageRec, MockDb, UserRec } from "@repo/mock/types";
 import { getTalent, getTalentSummaries, searchTalents } from "@repo/mock/catalogue/query";
 import type { Message, Session } from "./types";
+import { toIstDateKey } from "@repo/utils";
 
 // In-browser mock transport (localStorage). Same interface as http-client.ts; client.ts picks one.
 
@@ -464,6 +465,11 @@ export const mockApi = {
 
   /** Catalogue reads for client components (server pages use lib/catalogue.ts). */
   catalogue: {
+    blockedDates: (slug: string) =>
+      call(() => {
+        const today = toIstDateKey(new Date());
+        return calendarFor(loadDb(), slug).all.filter((date) => date >= today);
+      }),
     summaries: (slugs: string[]) => call(() => getTalentSummaries(slugs)),
     profile: (slug: string) =>
       call(() => {

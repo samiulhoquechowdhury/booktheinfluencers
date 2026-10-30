@@ -33,11 +33,11 @@ async function signInTalent(phone: string) {
   return { authorization: `Bearer ${res.body.accessToken}` };
 }
 
-const enquire = (slugs: string[], eventDate: string) =>
+const enquire = (slugs: string[], eventDate: string, altDate?: string) =>
   http()
     .post("/v1/enquiries")
     .set(as("customer"))
-    .send({ eventType: "Wedding", eventDate, city: "Mumbai", budgetBand: "1l-3l", talentSlugs: slugs, contactName: "Calendar Customer", phone: "9876522222" });
+    .send({ eventType: "Wedding", eventDate, altDate, city: "Mumbai", budgetBand: "1l-3l", talentSlugs: slugs, contactName: "Calendar Customer", phone: "9876522222" });
 
 const act = (role: string, bookingId: string, action: string, note?: string) =>
   http().post(`/v1/admin/bookings/${bookingId}/actions`).set(as(role)).send({ action, note });
@@ -80,6 +80,25 @@ describe("calendar (AVL-4, TAL-3)", () => {
     expect(added.body.error.code).toBe("DATE_BLOCKED");
     await http().delete(`/v1/admin/talents/kabir-malhotra/blackouts/${date}`).set(as("talent")).expect(204);
     await http().post(`/v1/admin/leads/${ok.body.leadId}/talents`).set(as("sales")).send({ slug: "kabir-malhotra" }).expect(204);
+  });
+
+  it("shows customers the blocked dates, and nothing about why", async () => {
+    const date = freshDate();
+    await http().post(`/v1/admin/talents/dj-rhea/blackouts/${date}`).set(as("talent")).send({ note: "Private family matter" }).expect(204);
+    const res = await http().get("/v1/talents/dj-rhea/blocked-dates").expect(200);
+    expect(res.body.dates).toContain(date);
+    expect(JSON.stringify(res.body)).not.toContain("Private family matter");
+    await http().get("/v1/talents/nobody-here/blocked-dates").expect(404);
+    await http().delete(`/v1/admin/talents/dj-rhea/blackouts/${date}`).set(as("talent")).expect(204);
+    expect((await http().get("/v1/talents/dj-rhea/blocked-dates").expect(200)).body.dates).not.toContain(date);
+  });
+
+  it("refuses a blocked alternate date too", async () => {
+    const [date, alt] = [freshDate(), freshDate()];
+    await http().post(`/v1/admin/talents/meera-iyer/blackouts/${alt}`).set(as("talent")).expect(204);
+    const refused = await enquire(["meera-iyer"], date, alt).expect(409);
+    expect(refused.body.error.code).toBe("DATE_BLOCKED");
+    await http().delete(`/v1/admin/talents/meera-iyer/blackouts/${alt}`).set(as("talent")).expect(204);
   });
 
   it("holds the date once a booking is confirmed and frees it if the booking is cancelled", async () => {

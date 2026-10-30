@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Plus, Search, X } from "lucide-react";
 import { EnquiryInputSchema, type EnquiryFormValues, type EnquiryInput } from "@repo/schemas";
-import { toIstDateKey } from "@repo/utils";
+import { formatDate, toIstDateKey } from "@repo/utils";
 import { BUDGET_BANDS, CITIES, EVENT_TYPES, LANGUAGES } from "@repo/mock/catalogue/data";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
-import { keys, useSession, useTalentSearch, useTalentSummaries } from "@/lib/api/hooks";
+import { blockedDatesQuery, keys, useSession, useTalentSearch, useTalentSummaries } from "@/lib/api/hooks";
 import { feeBand } from "@/lib/format";
 import { OtpForm } from "@/components/auth/otp-form";
 import { isUploaded, photoAt } from "@/lib/photo";
@@ -59,6 +59,20 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
   const { register, formState, trigger, control, setValue, getValues, handleSubmit, setError } = form;
   const errors = formState.errors;
   const selected = useWatch({ control, name: "talentSlugs" }) ?? [];
+  const eventDate = useWatch({ control, name: "eventDate" });
+  const altDate = useWatch({ control, name: "altDate" });
+  const shortlist = useTalentSummaries(selected);
+  const calendars = useQueries({ queries: selected.map(blockedDatesQuery) });
+
+  /** Who on the shortlist can't do this date, so the customer finds out now, not after filling in the whole brief. */
+  const blockedOn = (date: string | undefined) => (date ? selected.filter((_, i) => calendars[i]?.data?.includes(date)) : []);
+  const clash = (date: string | undefined) => {
+    const slugs = blockedOn(date);
+    if (slugs.length === 0) return null;
+    const names = slugs.map((slug) => shortlist.data?.find((t) => t.slug === slug)?.stageName ?? "This artist");
+    const who = names.length === 1 ? `${names[0]} isn't` : `${names.slice(0, -1).join(", ")} and ${names.at(-1)} aren't`;
+    return `${who} available on ${formatDate(`${date}T12:00:00+05:30`)}. Pick another date or remove them from the shortlist.`;
+  };
 
   const submit = useMutation({
     mutationFn: (values: EnquiryInput) => api.enquiries.submit(values),
@@ -78,6 +92,11 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
   });
 
   const next = async () => {
+    if (clash(eventDate) || clash(altDate)) {
+      setStep(0); // an artist added on the next step can clash with the date picked on this one
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (await trigger([...STEPS[step]!.fields])) {
       setStep((s) => s + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -158,12 +177,12 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
               <label>
                 {label("Event date")}
                 <input type="date" min={today} {...register("eventDate")} {...aria("eventDate")} className={inputClass} />
-                {error("eventDate")}
+                {clash(eventDate) ? <p role="alert" className="mt-1.5 text-xs text-rose-700">{clash(eventDate)}</p> : error("eventDate")}
               </label>
               <label>
                 {label("Alternate date", true)}
                 <input type="date" min={today} {...register("altDate")} {...aria("altDate")} className={inputClass} />
-                {error("altDate")}
+                {clash(altDate) ? <p role="alert" className="mt-1.5 text-xs text-rose-700">{clash(altDate)}</p> : error("altDate")}
               </label>
               <label>
                 {label("City")}
@@ -213,6 +232,7 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
               <legend className="mb-1 font-serif text-2xl font-semibold text-ink">Who would you like?</legend>
               <TalentPicker
                 selected={selected}
+                unavailable={[...blockedOn(eventDate), ...blockedOn(altDate)]}
                 onChange={(slugs) => setValue("talentSlugs", slugs, { shouldValidate: true })}
               />
               {error("talentSlugs")}
@@ -361,7 +381,7 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
   );
 }
 
-function TalentPicker({ selected, onChange }: { selected: string[]; onChange: (slugs: string[]) => void }) {
+function TalentPicker({ selected, unavailable, onChange }: { selected: string[]; unavailable: string[]; onChange: (slugs: string[]) => void }) {
   const [query, setQuery] = useState("");
   const chosen = useTalentSummaries(selected);
   const search = useTalentSearch(query);
@@ -393,6 +413,7 @@ function TalentPicker({ selected, onChange }: { selected: string[]; onChange: (s
                   <span className="block truncate text-xs text-muted">
                     {talent.headline} · {feeBand(talent)}
                   </span>
+                  {unavailable.includes(slug) && <span className="block text-xs font-medium text-rose-700">Not available on your date</span>}
                 </span>
                 <button
                   type="button"
