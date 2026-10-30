@@ -24,8 +24,8 @@ const INTERVAL_MS = 7000;
 const SWIPE_PX = 50;
 
 /**
- * Full-bleed hero carousel. Loops forever, pausing while hovered or focused. Dots, ←/→ keys and swipes
- * change slides.
+ * Full-bleed hero carousel. Loops forever, pausing only while a keyboard user is on one of its links or dots.
+ * Dots, ←/→ keys and swipes change slides.
  * With reduced motion the photos only cross-fade (no zoom, no slide-up).
  */
 export function HeroCarousel({ slides: served, bundled, children }: { slides: PublicHeroSlide[]; bundled: StaticImageData; children: ReactNode }) {
@@ -34,9 +34,9 @@ export function HeroCarousel({ slides: served, bundled, children }: { slides: Pu
   const [picked, setPicked] = useState(0);
   const active = picked % slides.length;
   const textRight = slides[active]?.textPosition === "right";
-  const [hovered, setHovered] = useState(false);
+  const [tabbedIn, setTabbedIn] = useState(false);
   const many = slides.length > 1;
-  const running = many && !hovered;
+  const running = many && !tabbedIn;
   const touchX = useRef<number | null>(null);
 
   const go = useCallback((delta: number) => setPicked((i) => (i + delta + slides.length) % slides.length), [slides.length]);
@@ -52,10 +52,9 @@ export function HeroCarousel({ slides: served, bundled, children }: { slides: Pu
     <div
       aria-roledescription={many ? "carousel" : undefined}
       aria-label="Highlights"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setHovered(true)}
-      onBlur={() => setHovered(false)}
+      // :focus-visible, because a mouse click on a dot also focuses it and would otherwise stop the carousel.
+      onFocus={(e) => setTabbedIn(e.target.matches(":focus-visible"))}
+      onBlur={() => setTabbedIn(false)}
       onKeyDown={(e) => {
         if (!many || (e.target as HTMLElement).closest("input, select, textarea")) return;
         if (e.key === "ArrowRight") go(1);
@@ -102,7 +101,7 @@ export function HeroCarousel({ slides: served, bundled, children }: { slides: Pu
         <div className="shell w-full pb-12 pt-14 lg:pb-16 lg:pt-20">
           <div className="[text-shadow:0_2px_18px_rgb(0_0_0/0.35)]">
             {/* Every slide's text sits in the same grid cell, so the block is as tall as the longest one. */}
-            <div className="grid" aria-live={hovered ? "polite" : "off"}>
+            <div className="grid" aria-live={tabbedIn ? "polite" : "off"}>
               {slides.map((slide, i) => {
                 const Heading = i === 0 ? "h1" : "h2";
                 const shown = i === active;
