@@ -28,6 +28,7 @@ import {
 import { toCustomerLead, toTalentBooking } from "@repo/mock/serializers";
 import { contractPdfData, quotePdfData } from "@repo/mock/documents";
 import { recordLogin } from "@repo/mock/login-events";
+import { assertCanSignIn, canUseAccount } from "@repo/mock/users";
 import { addOnboardingDocument, ensureOnboardingDraft, onboardingState, ownDocumentUrl, removeOnboardingDocument, saveOnboarding, submitOnboarding } from "@repo/mock/onboarding";
 import { pdfFonts, saveBlob } from "@/lib/download";
 import { loadDb, mutate, readSessionUserId, resetDb, writeSessionUserId } from "@repo/mock/store";
@@ -56,7 +57,7 @@ const toSession = (user: UserRec): Session => ({
 function currentUser(db: MockDb): UserRec {
   const id = readSessionUserId();
   const user = id ? db.users.find((u) => u.id === id) : undefined;
-  if (!user) throw new ApiError("UNAUTHENTICATED", "Please sign in to continue");
+  if (!user || !canUseAccount(user)) throw new ApiError("UNAUTHENTICATED", "Please sign in to continue");
   return user;
 }
 
@@ -80,7 +81,7 @@ export const mockApi = {
       call(() => {
         const id = readSessionUserId();
         const user = id ? loadDb().users.find((u) => u.id === id) : undefined;
-        return user ? toSession(user) : null;
+        return user && canUseAccount(user) ? toSession(user) : null;
       }),
 
     requestOtp: (phone: string) =>
@@ -97,6 +98,7 @@ export const mockApi = {
             if (input.code !== DEMO_OTP) throw new ApiError("OTP_INVALID", "That code is not right. Try again.");
             let user = db.users.find((u) => u.phone === input.phone);
             let created = false;
+            if (user) assertCanSignIn(user);
             if (input.as === "talent") {
               if (!user) {
                 user = { id: newId("usr"), phone: input.phone, name: input.name?.trim() || "New artist", email: null, roles: ["TALENT"], talentSlug: null, createdAt: new Date().toISOString() };
@@ -121,6 +123,8 @@ export const mockApi = {
             } else if (!user.roles.includes("CUSTOMER")) {
               user.roles.push("CUSTOMER");
             }
+            user!.lastLoginAt = nowIso();
+            user!.signedOutAt = null;
             writeSessionUserId(user!.id);
             recordLogin(db, { audience: input.as, event: "sign_in", identifier: input.phone, userId: user?.id ?? null, userName: user?.name ?? null, detail: created ? "New account" : null });
             return toSession(user!);
@@ -130,7 +134,7 @@ export const mockApi = {
           if (error instanceof ApiError) {
             mutate((db) => {
               const known = db.users.find((u) => u.phone === input.phone);
-              recordLogin(db, { audience: input.as, event: "sign_in_failed", identifier: input.phone, userId: known?.id ?? null, userName: known?.name ?? null, detail: "Wrong or expired code" });
+              recordLogin(db, { audience: input.as, event: "sign_in_failed", identifier: input.phone, userId: known?.id ?? null, userName: known?.name ?? null, detail: error.code === "ACCOUNT_BLOCKED" ? "Account blocked" : error.code === "ACCOUNT_DISABLED" ? "Account deactivated" : "Wrong or expired code" });
             });
           }
           throw error;

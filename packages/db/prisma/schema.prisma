@@ -22,6 +22,11 @@ enum Role {
   CUSTOMER
 }
 
+enum AccountRestriction {
+  DEACTIVATED
+  BLOCKED
+}
+
 enum RepresentationType {
   TALENT_MANAGED
   AGENCY_MANAGED
@@ -140,7 +145,10 @@ model User {
   passwordHash       String? // staff only (scrypt)
   mfaSecret          String? // staff only, encrypted at rest
   roles              Role[]
-  disabledAt         DateTime? // staff: deactivated by a super admin; can't sign in
+  disabledAt         DateTime? // deactivated or blocked by a super admin; can't sign in
+  disabledKind       AccountRestriction? // customers and artists: why they can't sign in (staff use disabledAt alone)
+  disabledReason     String?
+  disabledByName     String?
   mustChangePassword Boolean   @default(false) // staff: signed in with a temporary password
   lastLoginAt        DateTime?
   createdAt          DateTime  @default(now())

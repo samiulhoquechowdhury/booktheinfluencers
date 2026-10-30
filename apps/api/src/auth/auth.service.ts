@@ -54,7 +54,7 @@ export class AuthService {
     return { sentTo: phone, resendInSeconds: OTP_RESEND_GAP_MS / 1000 };
   }
 
-  /** AUTH-1/AUTH-4: customers are created on first verify. AUTH-3: talent accounts exist only by invite. */
+  /** AUTH-1/AUTH-4: customers and artists are created on first verify. Blocked or deactivated accounts can't sign in. */
   async verifyOtp(input: { phone: string; code: string; name?: string; as: "customer" | "talent" }, meta: RequestMeta): Promise<IssuedSession> {
     try {
       const { session, created } = await this.verifyOtpInner(input);
@@ -83,6 +83,11 @@ export class AuthService {
     await this.prisma.db.otpCode.update({ where: { id: otp.id }, data: { usedAt: new Date() } });
 
     let user = await this.prisma.db.user.findUnique({ where: { phone: input.phone } });
+    // Checked after the code, so only the owner of the number learns the account is restricted.
+    if (user?.disabledAt) {
+      if (user.disabledKind === "BLOCKED") throw new DomainError("ACCOUNT_BLOCKED", "This account has been blocked. Contact us if you think this is a mistake.", 403);
+      throw new DomainError("ACCOUNT_DISABLED", "This account has been deactivated. Contact us to restore it.", 403);
+    }
     if (input.as === "talent") {
       // Anyone can join as an artist: they get a private draft to complete, and nothing shows publicly until a
       // talent manager approves it (CRM → Verifications).
@@ -99,6 +104,7 @@ export class AuthService {
     } else if (!user.roles.includes("CUSTOMER")) {
       user = await this.prisma.db.user.update({ where: { id: user.id }, data: { roles: { push: "CUSTOMER" } } });
     }
+    await this.prisma.db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     return { session: await this.issue(user, false), created };
   }
 

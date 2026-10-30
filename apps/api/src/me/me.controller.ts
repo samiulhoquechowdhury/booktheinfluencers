@@ -4,6 +4,7 @@ import { notFound } from "../common/errors";
 import { parse } from "../common/validate";
 import { CurrentUser, Roles, type AuthUser } from "../auth/guard";
 import { PrismaService } from "../prisma/prisma.service";
+import { LISTED } from "../catalogue/listed";
 
 export const MessageBody = z.object({ body: z.string().trim().min(1, "Write a message first").max(2000, "Keep messages under 2000 characters") });
 
@@ -30,7 +31,7 @@ export class MeController {
   @Put("favourites/:slug")
   @HttpCode(204)
   async save(@CurrentUser() user: AuthUser, @Param("slug") slug: string) {
-    const talent = await this.prisma.db.talent.findFirst({ where: { slug, status: "PUBLISHED" } });
+    const talent = await this.prisma.db.talent.findFirst({ where: { slug, ...LISTED } });
     if (!talent) throw notFound("Talent");
     await this.prisma.db.favourite.upsert({ where: { userId_talentId: { userId: user.id, talentId: talent.id } }, create: { userId: user.id, talentId: talent.id }, update: {} });
   }

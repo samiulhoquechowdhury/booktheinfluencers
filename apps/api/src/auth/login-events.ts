@@ -43,6 +43,7 @@ export async function recordLogin(db: PrismaClient, meta: RequestMeta, entry: Lo
 export const FAILURE_DETAIL: Record<string, string> = {
   INVALID_LOGIN: "Wrong email or password",
   ACCOUNT_DISABLED: "Account deactivated",
+  ACCOUNT_BLOCKED: "Account blocked",
   OTP_INVALID: "Wrong or expired code",
   MFA_EXPIRED: "Sign-in timed out",
   NOT_INVITED: "No artist account for this number",

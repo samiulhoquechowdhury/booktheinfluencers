@@ -39,13 +39,11 @@ export class AuthGuard implements CanActivate {
         const claims = await verifyAccessToken(token);
         // Staff roles only count on an MFA session (runbook: security checklist).
         let roles = claims.mfa ? claims.roles : claims.roles.filter((r) => !STAFF_ROLES.includes(r));
-        // Staff permissions are read fresh, so a deactivation, role change or super admin transfer applies
-        // on the next request rather than when the 15-minute token runs out.
-        if (roles.some((r) => STAFF_ROLES.includes(r))) {
-          const current = await this.prisma.db.user.findUnique({ where: { id: claims.sub }, select: { roles: true, disabledAt: true } });
-          if (!current || current.disabledAt) throw new Error("Staff account no longer active");
-          roles = current.roles;
-        }
+        // Accounts are read fresh, so a block, deactivation, role change or super admin transfer applies on the
+        // next request rather than when the 15-minute token runs out.
+        const current = await this.prisma.db.user.findUnique({ where: { id: claims.sub }, select: { roles: true, disabledAt: true, deletedAt: true } });
+        if (!current || current.disabledAt || current.deletedAt) throw new Error("Account no longer active");
+        if (roles.some((r) => STAFF_ROLES.includes(r))) roles = current.roles;
         req.user = { id: claims.sub, roles };
       } catch {
         if (!this.reflector.getAllAndOverride<boolean>(PUBLIC, targets)) throw unauthenticated("Your session has expired");

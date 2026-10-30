@@ -10,3 +10,4 @@ export * from "./talent-import";
 export * from "./follow-ups";
 export * from "./reconciliation";
 export * from "./talent-onboarding";
+export * from "./users-admin";

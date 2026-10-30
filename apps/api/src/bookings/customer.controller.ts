@@ -8,6 +8,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { customerLeadInclude, toCustomerLead } from "./customer-serializer";
 import { activity, assertDateOpen, createMilestones, evaluateConfirmation, nextRef, transitionLead } from "./domain";
 import { notifyCustomer } from "@repo/db";
+import { LISTED } from "../catalogue/listed";
 
 const BUDGETS: Record<string, { min: bigint | null; max: bigint | null }> = {
   "under-1l": { min: null, max: 10_000_000n },
@@ -30,7 +31,7 @@ export class CustomerBookingsController {
   async submit(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const input = parse(EnquiryInputSchema, body);
     const band = BUDGETS[input.budgetBand] ?? { min: null, max: null };
-    const talents = await this.prisma.db.talent.findMany({ where: { slug: { in: input.talentSlugs }, status: "PUBLISHED" } });
+    const talents = await this.prisma.db.talent.findMany({ where: { slug: { in: input.talentSlugs }, ...LISTED } });
     if (talents.length !== new Set(input.talentSlugs).size) throw new DomainError("VALIDATION", "One of the selected artists isn't available to book");
 
     return this.prisma.db.$transaction(async (tx) => {

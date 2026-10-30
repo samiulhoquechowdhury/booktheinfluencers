@@ -6,6 +6,7 @@ import { notFound } from "../common/errors";
 import { paise, parse } from "../common/validate";
 import { Public } from "../auth/guard";
 import { PrismaService } from "../prisma/prisma.service";
+import { LISTED } from "./listed";
 
 const PAGE_SIZE = 12;
 
@@ -88,7 +89,7 @@ export class CatalogueController {
     const f = parse(Filters, query);
     const band = f.budget ? BUDGETS[f.budget] : undefined;
     const where: Prisma.TalentWhereInput = {
-      status: "PUBLISHED",
+      ...LISTED,
       ...(f.slugs && { slug: { in: f.slugs } }),
       ...(f.category && { categories: { some: { category: { slug: f.category } } } }),
       ...(f.eventType && { eventTypes: { has: f.eventType } }),
@@ -138,7 +139,7 @@ export class CatalogueController {
   @Public()
   @Get("talents/:slug")
   async get(@Param("slug") slug: string) {
-    const talent = await this.prisma.db.talent.findFirst({ where: { slug, status: "PUBLISHED" }, include: talentInclude });
+    const talent = await this.prisma.db.talent.findFirst({ where: { slug, ...LISTED }, include: talentInclude });
     if (!talent) throw notFound("Talent");
     return toProfile(talent);
   }

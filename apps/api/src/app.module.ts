@@ -30,6 +30,8 @@ import { VerificationsController } from "./verifications/verifications.controlle
 import { VerificationsService } from "./verifications/verifications.service";
 import { DevProvidersController } from "./webhooks/dev-providers.controller";
 import { WebhooksController } from "./webhooks/webhooks.controller";
+import { UsersController } from "./users/users.controller";
+import { UsersService } from "./users/users.service";
 
 @Module({
   controllers: [
@@ -48,7 +50,7 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     CustomerDocumentsController,
     StaffDocumentsController,
     ReconciliationController,
-    VerificationsController,
+    VerificationsController, UsersController,
     WebhooksController,
     // Simulated provider screens never ship to production.
     ...(env.NODE_ENV === "production" ? [] : [DevProvidersController]),
@@ -63,7 +65,7 @@ import { WebhooksController } from "./webhooks/webhooks.controller";
     FollowUpsService,
     DocumentsService,
     OnboardingService,
-    VerificationsService,
+    VerificationsService, UsersService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],

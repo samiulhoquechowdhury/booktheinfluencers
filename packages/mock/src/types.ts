@@ -29,6 +29,11 @@ export type UserRec = {
   roles: ("CUSTOMER" | "TALENT")[];
   talentSlug: string | null;
   createdAt: string;
+  lastLoginAt?: string | null;
+  /** Set when a super admin deactivates or blocks the account (CRM → Users). */
+  restriction?: { kind: "DEACTIVATED" | "BLOCKED"; reason: string; byName: string; at: string } | null;
+  /** Ends the browser session on its next read: the demo's stand-in for revoking sessions. */
+  signedOutAt?: string | null;
 };
 
 export type LeadRec = {

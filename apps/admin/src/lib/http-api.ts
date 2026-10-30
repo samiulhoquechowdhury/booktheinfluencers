@@ -2,7 +2,7 @@
 
 import { ApiError } from "@repo/mock/server";
 import { STAFF_ROLES, type StaffRole } from "@repo/mock/internal";
-import type { FollowUpRecord, HeroSlideRecord, ImportResult, ReconciliationOverview, ReconciliationRunRecord, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword, VerificationDetail, VerificationRow } from "@repo/schemas";
+import type { FollowUpRecord, HeroSlideRecord, ImportResult, ReconciliationOverview, ReconciliationRunRecord, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword, UserDetail, UsersPage, VerificationDetail, VerificationRow } from "@repo/schemas";
 import { saveBlob } from "./download";
 import type { mockApi, LeadDetail, LeadRow, StaffSession } from "./mock-api";
 
@@ -302,6 +302,17 @@ export const httpApi: typeof mockApi = {
   documents: {
     quotePdf: (quoteId) => download(`/admin/quotes/${id(quoteId)}/pdf`),
     contractPdf: (contractId) => download(`/admin/contracts/${id(contractId)}/pdf`),
+  },
+
+  users: {
+    list: (filters = {}) => {
+      const query = new URLSearchParams(Object.entries(filters).flatMap(([key, value]) => (value ? [[key, String(value)]] : [])));
+      return request<UsersPage>(`/admin/users${query.size ? `?${query}` : ""}`);
+    },
+    get: (userId) => request<UserDetail>(`/admin/users/${id(userId)}`),
+    restrict: (userId, input) => post(`/admin/users/${id(userId)}/restrict`, input),
+    restore: (userId) => post(`/admin/users/${id(userId)}/restore`),
+    signOut: (userId) => post(`/admin/users/${id(userId)}/sign-out`),
   },
 
   verifications: {

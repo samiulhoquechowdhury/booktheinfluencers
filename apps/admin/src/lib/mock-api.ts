@@ -10,6 +10,8 @@ import { reconciliationOverview, runReconciliation } from "@repo/mock/reconcile"
 import { pdfFonts, saveBlob } from "./download";
 import { createFollowUp, followUpsFor, myFollowUps, nextFollowUpAt, updateFollowUp } from "@repo/mock/follow-ups";
 import { signIns } from "@repo/mock/login-events";
+import { listUsers, restoreUser, restrictUser, signOutUser, userDetail } from "@repo/mock/users";
+import type { AccountRestrictInput, UserFilters } from "@repo/schemas";
 import { approveArtist, rejectArtist, staffDocumentUrl, verificationDetail, verificationQueue } from "@repo/mock/onboarding";
 import { createHero, deleteHero, listHero, reorderHero, updateHero, uploadMedia } from "@repo/mock/site";
 import {
@@ -200,6 +202,14 @@ export const mockApi = {
       const { buildContractPdf, pdfFileName } = await import("@repo/pdf");
       saveBlob(new Blob([(await buildContractPdf(data, await pdfFonts())) as BlobPart], { type: "application/pdf" }), pdfFileName("contract", data.ref));
     },
+  },
+
+  users: {
+    list: (filters: UserFilters = {}) => call(() => listUsers(loadDb(), actor(), filters)),
+    get: (userId: string) => call(() => userDetail(loadDb(), actor(), userId)),
+    restrict: (userId: string, input: AccountRestrictInput) => call(() => mutate((db) => restrictUser(db, actor(), userId, input))),
+    restore: (userId: string) => call(() => mutate((db) => restoreUser(db, actor(), userId))),
+    signOut: (userId: string) => call(() => mutate((db) => signOutUser(db, actor(), userId))),
   },
 
   verifications: {
