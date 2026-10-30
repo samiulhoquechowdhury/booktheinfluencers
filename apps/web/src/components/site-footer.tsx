@@ -34,7 +34,7 @@ const LEGAL = [
 
 export function SiteFooter() {
   return (
-    <footer className="bg-ink pt-16 print:hidden text-white sm:pt-20">
+    <footer className="bg-ink pt-16 print:hidden text-white sm:pt-20 [body:has([data-hide-footer])_&]:hidden">
       <div className="shell grid gap-12 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1.4fr] lg:gap-10">
         <div>
           <Link href="/" className="font-serif text-2xl font-semibold tracking-tight">

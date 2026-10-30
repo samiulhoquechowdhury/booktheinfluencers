@@ -82,25 +82,25 @@ export type OnboardingState = {
   profile: OnboardingProfile;
   documents: OnboardingDocument[];
   /** Plain-language list of what's left before submitting. */
-  missing: { step: "details" | "photos" | "social" | "documents"; label: string }[];
+  missing: { step: "details" | "photos" | "social" | "documents"; field: string; label: string }[];
 };
 
 /** What must be done before an artist can submit for review. */
 export function onboardingMissing(profile: OnboardingProfile, documentCount: number): OnboardingState["missing"] {
   const missing: OnboardingState["missing"] = [];
-  const need = (ok: unknown, step: OnboardingState["missing"][number]["step"], label: string) => {
-    if (!ok) missing.push({ step, label });
+  const need = (ok: unknown, step: OnboardingState["missing"][number]["step"], field: string, label: string) => {
+    if (!ok) missing.push({ step, field, label });
   };
-  need(profile.legalName.length >= 2, "details", "Your full legal name");
-  need(profile.stageName.length >= 2, "details", "Your stage name");
-  need(profile.headline.length >= 2, "details", "A one-line headline");
-  need(profile.bio.length >= 20, "details", "A short bio (at least a couple of sentences)");
-  need(profile.baseCity.length >= 2, "details", "Your base city");
-  need(profile.categories.length >= 1, "details", "At least one category");
-  need(profile.languages.length >= 1, "details", "At least one language");
-  need(profile.photoUrl, "photos", "A profile photo");
-  need(Object.values(profile.socialLinks).some(Boolean), "social", "At least one social media link");
-  need(documentCount >= 1, "documents", "At least one government ID");
+  need(profile.legalName.length >= 2, "details", "legalName", "Your full legal name");
+  need(profile.stageName.length >= 2, "details", "stageName", "Your stage name");
+  need(profile.headline.length >= 2, "details", "headline", "A one-line headline");
+  need(profile.bio.length >= 20, "details", "bio", "A short bio (at least a couple of sentences)");
+  need(profile.baseCity.length >= 2, "details", "baseCity", "Your base city");
+  need(profile.categories.length >= 1, "details", "categories", "At least one category");
+  need(profile.languages.length >= 1, "details", "languages", "At least one language");
+  need(profile.photoUrl, "photos", "photoUrl", "A profile photo");
+  need(Object.values(profile.socialLinks).some(Boolean), "social", "socialLinks", "At least one social media link");
+  need(documentCount >= 1, "documents", "documents", "At least one government ID");
   return missing;
 }
 

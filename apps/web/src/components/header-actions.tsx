@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { ArrowRight, CalendarDays, Heart, LayoutDashboard, LogOut, UserRound } from "lucide-react";
 import { useSession, useSignOut } from "@/lib/api/hooks";
 import { NotificationsBell } from "./notifications-bell";
@@ -10,6 +11,26 @@ export function HeaderActions() {
   const { data: session, isPending } = useSession();
   const signOut = useSignOut();
   const router = useRouter();
+  const menu = useRef<HTMLDetailsElement>(null);
+
+  // A click anywhere else, or Escape, closes the menu.
+  useEffect(() => {
+    const close = () => {
+      if (menu.current) menu.current.open = false;
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (!menu.current?.contains(e.target as Node)) close();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
 
   if (isPending) return <div aria-hidden className="h-[42px] w-40 animate-pulse rounded-md bg-cream max-sm:hidden" />;
 
@@ -45,14 +66,20 @@ export function HeaderActions() {
       >
         {isTalent && !isCustomer ? "Talent portal" : "My bookings"}
       </Link>
-      <details className="relative">
+      <details ref={menu} className="relative">
         <summary
           aria-label="Account menu"
           className="grid size-10 cursor-pointer list-none place-items-center rounded-full bg-ink sm:size-[42px] font-display text-sm font-semibold text-warm [&::-webkit-details-marker]:hidden"
         >
           {initials || <UserRound className="size-5" aria-hidden />}
         </summary>
-        <div className="absolute right-0 top-14 w-64 rounded-card border border-line bg-white p-2 shadow-card">
+        <div
+          // Picking something from the menu closes it too.
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest("a, button") && menu.current) menu.current.open = false;
+          }}
+          className="absolute right-0 top-14 w-64 rounded-card border border-line bg-white p-2 shadow-card"
+        >
           <p className="px-3 pb-2 pt-1">
             <span className="block font-display text-sm font-semibold text-ink">{session.name}</span>
             <span className="text-xs text-muted">+91 {session.phone}</span>

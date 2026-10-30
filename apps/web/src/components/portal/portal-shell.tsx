@@ -41,7 +41,7 @@ function Shell({ session, pathname, children }: { session: Session; pathname: st
               <div>
                 <p className="eyebrow text-gold-deep">Talent portal</p>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <h1 className="font-serif text-3xl font-semibold text-ink sm:text-4xl">{stageName}</h1>
+                  <h1 className="font-serif text-3xl font-semibold text-ink sm:text-4xl">{state!.editable ? "Set up your artist profile" : stageName}</h1>
                   <ReviewBadge status={state!.status} />
                 </div>
               </div>
