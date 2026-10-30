@@ -127,6 +127,18 @@ describe("artist onboarding", () => {
     await signUp(other);
 
     await http().get(`/v1/talent/onboarding/documents/${docId}`).set(as(owner)).expect(200);
+
+    // Encrypted in the database: the stored bytes are unreadable, and a tampered row is refused rather than served.
+    const stored = await db.talentDocument.findUniqueOrThrow({ where: { id: docId } });
+    expect(Buffer.from(stored.bytes).includes("%PDF")).toBe(false);
+    const tampered = Buffer.from(stored.bytes);
+    tampered[tampered.length - 1]! ^= 1;
+    await db.talentDocument.update({ where: { id: docId }, data: { bytes: new Uint8Array(tampered) } });
+    const refused = await http().get(`/v1/talent/onboarding/documents/${docId}`).set(as(owner)).expect(422);
+    expect(refused.body.error.code).toBe("DOCUMENT_UNREADABLE");
+    await db.talentDocument.update({ where: { id: docId }, data: { bytes: stored.bytes } });
+    await http().get(`/v1/talent/onboarding/documents/${docId}`).set(as(owner)).expect(200);
+
     await http().get(`/v1/talent/onboarding/documents/${docId}`).set(as(other)).expect(404);
     await http().get(`/v1/talent/onboarding/documents/${docId}`).set(as("customer")).expect(403);
     await http().get(`/v1/talent/onboarding/documents/${docId}`).expect(401);

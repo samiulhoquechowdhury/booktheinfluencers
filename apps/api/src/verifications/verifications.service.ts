@@ -5,6 +5,7 @@ import { DomainError, forbidden, notFound } from "../common/errors";
 import type { AuthUser } from "../auth/guard";
 import { PrismaService } from "../prisma/prisma.service";
 import { can } from "../staff/staff.service";
+import { openDocument } from "../talent/document-vault";
 import { docRecord, docSelect } from "../talent/onboarding.service";
 
 // CRM → Verifications: talent managers check artists' details and ID, then approve (the profile goes live with a
@@ -80,8 +81,9 @@ export class VerificationsService {
     this.require(user);
     const doc = await this.prisma.db.talentDocument.findUnique({ where: { id }, include: { talent: { select: { slug: true, stageName: true } } } });
     if (!doc) throw notFound("Document");
+    const bytes = openDocument(doc.bytes, doc.talentId);
     await this.prisma.db.$transaction((tx) => this.audit(tx, user, "talent.documentViewed", doc.talent.slug, `Viewed ${doc.talent.stageName}'s ${doc.type.toLowerCase().replace("_", " ")}`));
-    return doc;
+    return { ...doc, bytes };
   }
 
   async approve(user: AuthUser, slug: string) {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const DEV_SECRET = "dev-only-secret-change-me-0123456789abcdef";
+const DEV_DOCUMENT_KEY = "ZGV2LW9ubHktaWQta2V5LW5vdC1mb3ItcHJvZC11c2U=";
 
 const EnvSchema = z
   .object({
@@ -13,6 +14,11 @@ const EnvSchema = z
     TOKEN_HASH_SECRET: z.string().min(32).default(DEV_SECRET),
     /** Shared secret the payment gateway / e-sign provider sign webhooks with. */
     WEBHOOK_SECRET: z.string().min(16).default(DEV_SECRET),
+    /** 32 random bytes, base64 (`openssl rand -base64 32`). Encrypts ID documents. Losing it loses every stored ID. */
+    ID_DOCUMENT_KEY: z
+      .string()
+      .default(DEV_DOCUMENT_KEY)
+      .refine((v) => Buffer.from(v, "base64").length === 32, "Must be 32 bytes, base64 encoded"),
     /** Comma-separated browser origins allowed by CORS. */
     CORS_ORIGINS: z.string().default("http://localhost:3000,http://localhost:3001"),
     /** Demo shortcuts — never in production (docs/runbook.md). */
@@ -27,6 +33,7 @@ const EnvSchema = z
     for (const key of ["JWT_SECRET", "TOKEN_HASH_SECRET", "WEBHOOK_SECRET"] as const) {
       if (env[key] === DEV_SECRET) ctx.addIssue({ code: "custom", path: [key], message: `${key} must be set in production` });
     }
+    if (env.ID_DOCUMENT_KEY === DEV_DOCUMENT_KEY) ctx.addIssue({ code: "custom", path: ["ID_DOCUMENT_KEY"], message: "ID_DOCUMENT_KEY must be set in production" });
   });
 
 export type Env = z.infer<typeof EnvSchema>;

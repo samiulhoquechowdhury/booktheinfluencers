@@ -14,6 +14,7 @@ import { DomainError, notFound } from "../common/errors";
 import type { AuthUser } from "../auth/guard";
 import { PrismaService } from "../prisma/prisma.service";
 import { sniff } from "../site/site.service";
+import { openDocument, sealDocument } from "./document-vault";
 
 // Artist self-onboarding. The artist fills in their profile and ID; a talent manager reviews it (talents/verification).
 // Nothing here makes a profile public. Only approval does.
@@ -151,7 +152,7 @@ export class OnboardingService {
     const mime = isPdf ? "application/pdf" : sniff(body);
     if (!mime || mime !== contentType) throw new DomainError("VALIDATION", "Upload a JPEG, PNG, WebP or PDF file");
     const doc = await this.prisma.db.talentDocument.create({
-      data: { talentId: t.id, type, fileName: fileName.replace(/[^\w.\- ]/g, "_").slice(0, 120) || "document", mime, size: body.length, bytes: new Uint8Array(body) },
+      data: { talentId: t.id, type, fileName: fileName.replace(/[^\w.\- ]/g, "_").slice(0, 120) || "document", mime, size: body.length, bytes: sealDocument(body, t.id) },
       select: docSelect,
     });
     return docRecord(doc);
@@ -169,7 +170,7 @@ export class OnboardingService {
     const t = await this.talentOf(user);
     const doc = await this.prisma.db.talentDocument.findFirst({ where: { id, talentId: t.id } });
     if (!doc) throw notFound("Document");
-    return doc;
+    return { ...doc, bytes: openDocument(doc.bytes, t.id) };
   }
 
   async submit(user: AuthUser) {
