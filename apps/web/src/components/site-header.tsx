@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Menu, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { BRAND_NAME, NAV_LINKS } from "@/lib/site";
 import { HeaderActions } from "./header-actions";
+import { MobileNav } from "./mobile-nav";
 
 export function SiteHeader() {
   return (
@@ -34,36 +35,7 @@ export function SiteHeader() {
           </Link>
           <HeaderActions />
 
-          <details className="relative xl:hidden">
-            <summary
-              aria-label="Open menu"
-              className="grid size-10 cursor-pointer list-none place-items-center rounded-md text-ink hover:bg-cream [&::-webkit-details-marker]:hidden"
-            >
-              <Menu className="size-6" aria-hidden />
-            </summary>
-            <nav
-              aria-label="Mobile"
-              className="absolute right-0 top-12 w-64 rounded-card border border-line bg-white p-2 shadow-card"
-            >
-              {NAV_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="block rounded-md px-4 py-3 font-display text-[0.9375rem] font-medium text-ink hover:bg-cream"
-                >
-                  {link.label}
-                </Link>
-              ))}
-              <div className="mt-2 grid gap-2 border-t border-line pt-3 sm:hidden">
-                <Link href="/sign-in" className="btn btn-sm btn-outline">
-                  Sign in
-                </Link>
-                <Link href="/account" className="btn btn-sm btn-dark">
-                  My bookings
-                </Link>
-              </div>
-            </nav>
-          </details>
+          <MobileNav />
         </div>
       </div>
     </header>
