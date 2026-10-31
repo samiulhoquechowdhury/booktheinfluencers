@@ -2,18 +2,17 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlarmClock, CalendarDays, Columns3, Rows3, Search, X } from "lucide-react";
+import { AlarmClock, ArrowRight, Columns3, Hourglass, Rows3, Search, SlidersHorizontal, X } from "lucide-react";
 import { followUpState } from "@/components/lead/follow-ups";
 import { formatDate, type LeadStage } from "@repo/utils";
 import { CATEGORIES } from "@repo/mock/catalogue/data";
 import { api, errorMessage, type LeadRow } from "@/lib/api";
-import { AVAILABILITY_LABELS, PIPELINE_COLUMNS, STAGE_LABELS, availabilityTone, inrCompact, istDate, stageTone } from "@/lib/format";
-import { keys } from "@/lib/hooks";
+import { PIPELINE_COLUMNS, STAGE_LABELS, inrCompact, istDate, stageTone } from "@/lib/format";
+import { keys, useStaffSession } from "@/lib/hooks";
+import { FINISHED, PHASES, nextStep } from "@/lib/lead-guide";
 import { Failure, Loading, PageHeader, Pill, inputClass } from "@/components/ui";
-
-const TERMINAL: LeadStage[] = ["CLOSED", "LOST", "CANCELLED"];
 
 export default function PipelinePage() {
   return (
@@ -23,13 +22,18 @@ export default function PipelinePage() {
   );
 }
 
+type Show = "open" | "attention" | "mine" | "unassigned" | "closed";
+
+const needsAttention = (lead: LeadRow) => !lead.ownerName || (lead.nextFollowUpAt !== null && followUpState(lead.nextFollowUpAt) !== "later");
+
 function Pipeline() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const { data: staff } = useStaffSession();
   const view = params.get("view") === "table" ? "table" : "board";
+  const show = (params.get("show") ?? "open") as Show;
   const filters = {
-    q: params.get("q") ?? "",
     owner: params.get("owner") ?? "",
     stage: params.get("stage") ?? "",
     city: params.get("city") ?? "",
@@ -37,6 +41,7 @@ function Pipeline() {
     from: params.get("from") ?? "",
     to: params.get("to") ?? "",
   };
+  const q = params.get("q") ?? "";
   const set = (patch: Record<string, string>) => {
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(patch)) {
@@ -46,14 +51,16 @@ function Pipeline() {
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   };
 
+  const filterCount = Object.values(filters).filter(Boolean).length;
+  const [filtersOpen, setFiltersOpen] = useState(filterCount > 0);
   const { data, isPending, error, refetch } = useQuery({ queryKey: keys.leads, queryFn: api.leads.list });
 
-  const rows = useMemo(() => {
+  const matching = useMemo(() => {
     if (!data) return [];
-    const q = filters.q.toLowerCase();
+    const text = q.toLowerCase();
     return data.filter(
       (lead) =>
-        (!q || `${lead.ref} ${lead.contactName} ${lead.customerPhone} ${lead.bookings.map((b) => b.name).join(" ")}`.toLowerCase().includes(q)) &&
+        (!text || `${lead.ref} ${lead.contactName} ${lead.customerPhone} ${lead.bookings.map((b) => b.name).join(" ")}`.toLowerCase().includes(text)) &&
         (!filters.owner || (filters.owner === "unassigned" ? !lead.ownerName : lead.ownerName === filters.owner)) &&
         (!filters.stage || lead.stage === filters.stage) &&
         (!filters.city || lead.city === filters.city) &&
@@ -61,21 +68,31 @@ function Pipeline() {
         (!filters.from || lead.eventDate >= filters.from) &&
         (!filters.to || lead.eventDate <= filters.to),
     );
-  }, [data, filters.q, filters.owner, filters.stage, filters.city, filters.category, filters.from, filters.to]);
+  }, [data, q, filters.owner, filters.stage, filters.city, filters.category, filters.from, filters.to]);
 
   if (isPending) return <Loading />;
   if (error) return <Failure message={errorMessage(error)} onRetry={() => refetch()} />;
 
   const owners = [...new Set(data.map((l) => l.ownerName).filter((o): o is string => Boolean(o)))].sort();
   const cities = [...new Set(data.map((l) => l.city))].sort();
-  const active = Object.values(filters).some(Boolean);
-  const columns = filters.stage ? [filters.stage as LeadStage] : PIPELINE_COLUMNS;
+  const finishedFilter = FINISHED.includes(filters.stage as LeadStage);
+  const live = matching.filter((l) => !FINISHED.includes(l.stage));
+  const tabs: { id: Show; label: string; rows: LeadRow[] }[] = [
+    { id: "open", label: "All open", rows: live },
+    { id: "attention", label: "Needs attention", rows: live.filter(needsAttention) },
+    { id: "mine", label: "My leads", rows: live.filter((l) => l.ownerName === staff?.name) },
+    { id: "unassigned", label: "Unassigned", rows: live.filter((l) => !l.ownerName) },
+    { id: "closed", label: "Closed", rows: matching.filter((l) => FINISHED.includes(l.stage)) },
+  ];
+  const tab = finishedFilter ? tabs[4]! : (tabs.find((t) => t.id === show) ?? tabs[0]!);
+  const rows = tab.rows;
+  const asTable = view === "table" || tab.id === "closed";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title="Pipeline"
-        description={`${rows.length} of ${data.length} leads`}
+        description="Every enquiry, from first contact to final payment. Open a lead to see what to do next."
         actions={
           <div role="group" aria-label="View" className="flex rounded-md border border-line bg-white p-0.5">
             {(["board", "table"] as const).map((option) => (
@@ -87,89 +104,114 @@ function Pipeline() {
                 className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-sm ${view === option ? "bg-ink text-white" : "text-muted hover:text-ink"}`}
               >
                 {option === "board" ? <Columns3 className="size-4" aria-hidden /> : <Rows3 className="size-4" aria-hidden />}
-                {option === "board" ? "Board" : "Table"}
+                {option === "board" ? "Board" : "List"}
               </button>
             ))}
           </div>
         }
       />
 
-      <div className="space-y-2 rounded-xl border border-line bg-white p-3">
-        {/* Row 1: search and the four pickers. min-w-0 lets every control shrink inside its cell. */}
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-12">
-          <div className="relative sm:col-span-2 lg:col-span-4">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
-            <input value={filters.q} onChange={(e) => set({ q: e.target.value })} placeholder="Search ref, name, phone, artist" aria-label="Search" className={`${inputClass} min-w-0 pl-9`} />
-          </div>
-          <select value={filters.owner} onChange={(e) => set({ owner: e.target.value })} aria-label="Owner" className={`${inputClass} min-w-0 lg:col-span-2`}>
-            <option value="">Any owner</option>
-            <option value="unassigned">Unassigned</option>
-            {owners.map((o) => <option key={o}>{o}</option>)}
-          </select>
-          <select value={filters.stage} onChange={(e) => set({ stage: e.target.value })} aria-label="Stage" className={`${inputClass} min-w-0 lg:col-span-2`}>
-            <option value="">Any stage</option>
-            {[...PIPELINE_COLUMNS, ...TERMINAL].map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-          </select>
-          <select value={filters.city} onChange={(e) => set({ city: e.target.value })} aria-label="City" className={`${inputClass} min-w-0 lg:col-span-2`}>
-            <option value="">Any city</option>
-            {cities.map((c) => <option key={c}>{c}</option>)}
-          </select>
-          <select value={filters.category} onChange={(e) => set({ category: e.target.value })} aria-label="Category" className={`${inputClass} min-w-0 lg:col-span-2`}>
-            <option value="">Any category</option>
-            {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-          </select>
-        </div>
-
-        {/* Row 2: event date range, then clear. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span className="flex w-full items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted sm:w-auto">
-            <CalendarDays className="size-4" aria-hidden />
-            Event date
-          </span>
-          <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:w-auto">
-            <input type="date" value={filters.from} max={filters.to || undefined} onChange={(e) => set({ from: e.target.value })} aria-label="Event from" className={`${inputClass} min-w-0 sm:w-44`} />
-            <span className="text-sm text-muted">to</span>
-            <input type="date" value={filters.to} min={filters.from || undefined} onChange={(e) => set({ to: e.target.value })} aria-label="Event to" className={`${inputClass} min-w-0 sm:w-44`} />
-          </div>
-          {active && (
-            <button type="button" onClick={() => router.replace(view === "table" ? `${pathname}?view=table` : pathname)} className="ml-auto flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted hover:bg-cream hover:text-ink">
-              <X className="size-4" aria-hidden />
-              Clear filters
+      <div className="flex flex-wrap gap-1.5">
+        {tabs.map((t) => {
+          const on = t.id === tab.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => set({ show: t.id === "open" ? "" : t.id, ...(finishedFilter && { stage: "" }) })}
+              className={`cursor-pointer rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-inset ${on ? "bg-ink text-white ring-ink" : "bg-white text-ink-soft ring-line hover:ring-gold"}`}
+            >
+              {t.label} <span className={on ? "text-white/70" : "text-muted"}>{t.rows.length}</span>
             </button>
-          )}
-        </div>
+          );
+        })}
       </div>
 
-      {view === "board" ? (
-        <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:-mx-8 sm:px-8">
-          <div className="flex gap-3">
-            {columns.map((stage) => {
-              const items = rows.filter((l) => l.stage === stage);
-              return (
-                <section key={stage} aria-label={STAGE_LABELS[stage]} className="w-64 shrink-0 rounded-xl bg-cream/70 p-2">
-                  <h2 className="flex items-center justify-between px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-                    {STAGE_LABELS[stage]}
-                    <span className="rounded-full bg-white px-2 py-0.5 text-ink">{items.length}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-1 basis-64">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
+          <input value={q} onChange={(e) => set({ q: e.target.value })} placeholder="Search name, phone, reference or artist" aria-label="Search" className={`${inputClass} min-w-0 pl-9`} />
+        </div>
+        <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} className="btn btn-outline btn-sm">
+          <SlidersHorizontal aria-hidden />
+          Filters{filterCount > 0 && ` (${filterCount})`}
+        </button>
+        {(filterCount > 0 || q) && (
+          <button type="button" onClick={() => router.replace(view === "table" ? `${pathname}?view=table` : pathname)} className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted hover:bg-cream hover:text-ink">
+            <X className="size-4" aria-hidden />
+            Clear all
+          </button>
+        )}
+      </div>
+
+      {filtersOpen && (
+        <div className="grid gap-3 rounded-xl border border-line bg-white p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <FilterField label="Owner">
+            <select value={filters.owner} onChange={(e) => set({ owner: e.target.value })} className={inputClass}>
+              <option value="">Anyone</option>
+              <option value="unassigned">Unassigned</option>
+              {owners.map((o) => <option key={o}>{o}</option>)}
+            </select>
+          </FilterField>
+          <FilterField label="Stage">
+            <select value={filters.stage} onChange={(e) => set({ stage: e.target.value })} className={inputClass}>
+              <option value="">Any stage</option>
+              {[...PIPELINE_COLUMNS, ...FINISHED].map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+            </select>
+          </FilterField>
+          <FilterField label="City">
+            <select value={filters.city} onChange={(e) => set({ city: e.target.value })} className={inputClass}>
+              <option value="">Any city</option>
+              {cities.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </FilterField>
+          <FilterField label="Category">
+            <select value={filters.category} onChange={(e) => set({ category: e.target.value })} className={inputClass}>
+              <option value="">Any category</option>
+              {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+            </select>
+          </FilterField>
+          <FilterField label="Event from">
+            <input type="date" value={filters.from} max={filters.to || undefined} onChange={(e) => set({ from: e.target.value })} className={inputClass} />
+          </FilterField>
+          <FilterField label="Event to">
+            <input type="date" value={filters.to} min={filters.from || undefined} onChange={(e) => set({ to: e.target.value })} className={inputClass} />
+          </FilterField>
+        </div>
+      )}
+
+      {!asTable ? (
+        <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {PHASES.map((phase) => {
+            const items = rows.filter((l) => phase.stages.includes(l.stage));
+            return (
+              <section key={phase.id} aria-label={phase.label} className="min-w-0 rounded-xl bg-cream/70 p-2">
+                <div className="px-2 py-1.5">
+                  <h2 className="flex items-center justify-between gap-2 text-sm font-semibold text-ink">
+                    {phase.label}
+                    <span className="rounded-full bg-white px-2 py-0.5 text-xs">{items.length}</span>
                   </h2>
-                  <ul className="mt-1 space-y-2">
-                    {items.map((lead) => (
-                      <li key={lead.id}>
-                        <LeadCard lead={lead} />
-                      </li>
-                    ))}
-                    {items.length === 0 && <li className="px-2 py-4 text-center text-xs text-muted">Empty</li>}
-                  </ul>
-                </section>
-              );
-            })}
-          </div>
+                  <p className="text-xs text-muted">{phase.hint}</p>
+                </div>
+                <ul className="mt-1 space-y-2">
+                  {items.map((lead) => (
+                    <li key={lead.id}>
+                      <LeadCard lead={lead} />
+                    </li>
+                  ))}
+                  {items.length === 0 && <li className="px-2 py-4 text-center text-xs text-muted">Nothing here</li>}
+                </ul>
+              </section>
+            );
+          })}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-line bg-white">
-          <table className="w-full min-w-[820px] text-left text-sm">
+          <table className="w-full min-w-[880px] text-left text-sm">
             <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
               <tr>
-                {["Ref", "Customer", "Event", "Date", "City", "Artists", "Stage", "Owner", "Value"].map((h) => (
+                {["Customer", "Event", "Date", "Stage", "Next step", "Owner", "Value"].map((h) => (
                   <th key={h} scope="col" className="px-4 py-3 font-medium">{h}</th>
                 ))}
               </tr>
@@ -178,21 +220,23 @@ function Pipeline() {
               {rows.map((lead) => (
                 <tr key={lead.id} className="border-b border-line last:border-0 hover:bg-cream-soft">
                   <td className="px-4 py-3">
-                    <Link href={`/leads/${lead.id}`} className="font-semibold text-gold-deep hover:underline">{lead.ref}</Link>
+                    <Link href={`/leads/${lead.id}`} className="font-semibold text-ink hover:underline">{lead.contactName}</Link>
+                    <span className="block text-xs text-gold-deep">{lead.ref}</span>
                   </td>
-                  <td className="px-4 py-3">{lead.contactName}</td>
-                  <td className="px-4 py-3">{lead.eventType}</td>
+                  <td className="px-4 py-3">
+                    {lead.eventType}
+                    <span className="block text-xs text-muted">{lead.city} · {lead.bookings.map((b) => b.name).join(", ") || "No artists yet"}</span>
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3">{formatDate(istDate(lead.eventDate))}</td>
-                  <td className="px-4 py-3">{lead.city}</td>
-                  <td className="px-4 py-3">{lead.bookings.map((b) => b.name).join(", ") || "—"}</td>
                   <td className="px-4 py-3"><Pill tone={stageTone(lead.stage)}>{STAGE_LABELS[lead.stage]}</Pill></td>
+                  <td className="px-4 py-3"><NextStepLine lead={lead} /></td>
                   <td className="px-4 py-3">{lead.ownerName ?? <span className="text-muted">Unassigned</span>}</td>
                   <td className="whitespace-nowrap px-4 py-3">{lead.valuePaise ? inrCompact(lead.valuePaise) : "—"}</td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-muted">No leads match these filters.</td>
+                  <td colSpan={7} className="px-4 py-10 text-center text-muted">No leads here.</td>
                 </tr>
               )}
             </tbody>
@@ -203,33 +247,47 @@ function Pipeline() {
   );
 }
 
+function FilterField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="min-w-0 text-xs font-medium text-muted">
+      {label}
+      <div className="mt-1">{children}</div>
+    </label>
+  );
+}
+
+function NextStepLine({ lead }: { lead: LeadRow }) {
+  const step = nextStep(lead);
+  if (!step) return <span className="text-xs text-muted">Finished</span>;
+  return (
+    <span className={`flex items-center gap-1.5 text-xs font-medium ${step.waiting ? "text-muted" : "text-gold-deep"}`}>
+      {step.waiting ? <Hourglass className="size-3.5 shrink-0" aria-hidden /> : <ArrowRight className="size-3.5 shrink-0" aria-hidden />}
+      {step.title}
+    </span>
+  );
+}
+
 function LeadCard({ lead }: { lead: LeadRow }) {
+  const due = lead.nextFollowUpAt ? followUpState(lead.nextFollowUpAt) : "later";
   return (
     <Link href={`/leads/${lead.id}`} className="block rounded-lg border border-line bg-white p-3 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-gold-deep">{lead.ref}</span>
-        {lead.valuePaise && <span className="text-xs font-medium text-ink">{inrCompact(lead.valuePaise)}</span>}
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 truncate text-sm font-semibold text-ink">{lead.contactName}</p>
+        {lead.valuePaise && <span className="shrink-0 text-xs font-medium text-ink">{inrCompact(lead.valuePaise)}</span>}
       </div>
-      <p className="mt-1 truncate text-sm font-medium text-ink">{lead.contactName}</p>
       <p className="truncate text-xs text-muted">
         {lead.eventType} · {lead.city} · {formatDate(istDate(lead.eventDate))}
       </p>
-      {lead.bookings.length > 0 && (
-        <ul className="mt-2 space-y-1">
-          {lead.bookings.map((b) => (
-            <li key={b.id} className="flex items-center justify-between gap-2 text-xs">
-              <span className="truncate text-ink-soft">{b.name}</span>
-              <Pill tone={availabilityTone(b.availability)}>{AVAILABILITY_LABELS[b.availability]}</Pill>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <p className="truncate text-xs text-muted">{lead.ownerName ?? "Unassigned"}</p>
-        {lead.nextFollowUpAt && followUpState(lead.nextFollowUpAt) !== "later" && (
-          <Pill tone={followUpState(lead.nextFollowUpAt) === "overdue" ? "danger" : "action"}>
+      {lead.bookings.length > 0 && <p className="mt-1 truncate text-xs text-ink-soft">{lead.bookings.map((b) => b.name).join(", ")}</p>}
+      <div className="mt-2 border-t border-line pt-2">
+        <NextStepLine lead={lead} />
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1.5">
+        <p className="min-w-0 truncate text-xs text-muted">{lead.ownerName ?? "Unassigned"} · {STAGE_LABELS[lead.stage]}</p>
+        {due !== "later" && (
+          <Pill tone={due === "overdue" ? "danger" : "action"}>
             <AlarmClock className="size-3" aria-hidden />
-            {followUpState(lead.nextFollowUpAt) === "overdue" ? "Follow-up overdue" : "Follow-up today"}
+            {due === "overdue" ? "Overdue" : "Today"}
           </Pill>
         )}
       </div>
