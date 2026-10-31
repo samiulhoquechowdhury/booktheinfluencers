@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { ArrowRight, Menu, X } from "lucide-react";
 import { useSession } from "@/lib/api/hooks";
 import { BRAND_NAME, NAV_LINKS } from "@/lib/site";
@@ -13,7 +13,6 @@ import { BRAND_NAME, NAV_LINKS } from "@/lib/site";
  */
 export function MobileNav() {
   const { data: session, isPending } = useSession();
-  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const drawer = useRef<HTMLDialogElement>(null);
 
@@ -76,19 +75,10 @@ export function MobileNav() {
           </div>
 
           <nav aria-label="Mobile" className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3">
-            {NAV_LINKS.map((link) => {
-              const current = pathname === link.href || pathname.startsWith(`${link.href}/`);
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  aria-current={current ? "page" : undefined}
-                  className={`block rounded-md px-4 py-3.5 font-display text-base font-medium hover:bg-cream ${current ? "bg-cream text-gold-deep" : "text-ink"}`}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
+            {/* Reading the URL here, not in the header, keeps the header prerendered on every route. */}
+            <Suspense fallback={<NavLinks />}>
+              <CurrentNavLinks />
+            </Suspense>
           </nav>
 
           {!isPending && (
@@ -117,4 +107,24 @@ export function MobileNav() {
       </dialog>
     </div>
   );
+}
+
+function CurrentNavLinks() {
+  return <NavLinks pathname={usePathname()} />;
+}
+
+function NavLinks({ pathname }: { pathname?: string }) {
+  return NAV_LINKS.map((link) => {
+    const current = pathname === link.href || pathname?.startsWith(`${link.href}/`);
+    return (
+      <Link
+        key={link.href}
+        href={link.href}
+        aria-current={current ? "page" : undefined}
+        className={`block rounded-md px-4 py-3.5 font-display text-base font-medium hover:bg-cream ${current ? "bg-cream text-gold-deep" : "text-ink"}`}
+      >
+        {link.label}
+      </Link>
+    );
+  });
 }
