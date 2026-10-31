@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 import { env } from "./config/env";
 import { ErrorFilter } from "./common/errors";
+import { AssistantAdminController, AssistantController } from "./assistant/assistant.controller";
+import { AssistantService } from "./assistant/assistant.service";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
 import { AuthGuard } from "./auth/guard";
@@ -38,6 +40,8 @@ import { UsersService } from "./users/users.service";
     HealthController,
     AuthController,
     CatalogueController,
+    AssistantController,
+    AssistantAdminController,
     CustomerBookingsController,
     MeController,
     TalentPortalController,
@@ -66,6 +70,7 @@ import { UsersService } from "./users/users.service";
     DocumentsService,
     OnboardingService,
     VerificationsService, UsersService,
+    AssistantService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],

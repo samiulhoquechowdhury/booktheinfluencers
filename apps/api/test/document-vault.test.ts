@@ -30,6 +30,8 @@ describe("ID document vault", () => {
     const base = { DATABASE_URL: "postgresql://x:y@localhost/z", NODE_ENV: "production", JWT_SECRET: "a".repeat(32), TOKEN_HASH_SECRET: "b".repeat(32), WEBHOOK_SECRET: "c".repeat(32) };
     expect(() => loadEnv(base)).toThrow(/ID_DOCUMENT_KEY must be set/);
     expect(() => loadEnv({ ...base, ID_DOCUMENT_KEY: "too-short" })).toThrow(/32 bytes/);
-    expect(loadEnv({ ...base, ID_DOCUMENT_KEY: Buffer.alloc(32, 9).toString("base64") }).NODE_ENV).toBe("production");
+    const documents = { ID_DOCUMENT_KEY: Buffer.alloc(32, 9).toString("base64") };
+    expect(() => loadEnv({ ...base, ...documents })).toThrow(/SETTINGS_KEY must be set/);
+    expect(loadEnv({ ...base, ...documents, SETTINGS_KEY: Buffer.alloc(32, 8).toString("base64") }).NODE_ENV).toBe("production");
   });
 });

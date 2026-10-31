@@ -187,6 +187,8 @@ export type MockDb = {
   /** Home page hero carousel and the images uploaded for it (data URLs in demo mode). */
   heroSlides: HeroSlideRec[];
   media: Record<string, string>;
+  /** CRM → API. Only the end of the key: demo mode never calls Grok. */
+  assistant: { keyHint: string; model: string; enabled: boolean; updatedAt: string; updatedByName: string } | null;
   /** Artists who signed up themselves, keyed by talent slug (CRM → Verifications). */
   onboarding: Record<string, OnboardingRec>;
   /** Payment reconciliation runs, newest first (CRM → Payments). */

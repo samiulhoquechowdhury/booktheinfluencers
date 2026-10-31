@@ -1,6 +1,8 @@
 "use client";
 
 import type {
+  AssistantReply,
+  AssistantStatus,
   CustomerBooking,
   CustomerLead,
   EnquiryFormValues,
@@ -220,6 +222,11 @@ export const httpApi: typeof mockApi = {
     profile: (slug) => request<TalentProfile>(`/talents/${encodeURIComponent(slug)}`, { auth: false }),
     blockedDates: (slug) => request(`/talents/${encodeURIComponent(slug)}/blocked-dates`, { auth: false }),
     search: async (q) => (await request<{ data: TalentSummary[] }>(`/talents?q=${encodeURIComponent(q)}`, { auth: false })).data.slice(0, 8),
+  },
+
+  assistant: {
+    status: () => request<AssistantStatus>("/assistant/status", { auth: false }),
+    chat: (input) => request<AssistantReply>("/assistant/chat", { method: "POST", body: input, auth: false }),
   },
 
   /** Demo controls stand in for staff; with a real API, staff use apps/admin instead. */

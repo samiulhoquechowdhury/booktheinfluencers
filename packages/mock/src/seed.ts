@@ -106,6 +106,7 @@ export function buildSeed(): MockDb {
     heroSlides: structuredClone(DEFAULT_HERO_SLIDES),
     heroDefaultsVersion: 4,
     media: {},
+    assistant: null,
     loginEvents: [],
     followUps: [],
     reconciliationRuns: [],

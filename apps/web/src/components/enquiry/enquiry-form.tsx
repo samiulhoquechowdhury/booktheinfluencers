@@ -36,7 +36,7 @@ const inputClass =
 
 const optionalNumber = (value: unknown) => (value === "" || value == null ? undefined : Number(value));
 
-export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
+export function EnquiryForm({ initialTalents, initialDate }: { initialTalents: string[]; initialDate?: string }) {
   const client = useQueryClient();
   const { data: session } = useSession();
   const [step, setStep] = useState(0);
@@ -49,7 +49,7 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
     mode: "onTouched",
     defaultValues: {
       eventType: "",
-      eventDate: "",
+      eventDate: initialDate ?? "",
       altDate: "",
       city: "",
       venue: "",
@@ -76,11 +76,11 @@ export function EnquiryForm({ initialTalents }: { initialTalents: string[] }) {
       const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") as Partial<EnquiryFormValues> | null;
       if (!draft) return;
       const fresh = (date: string | undefined) => (date && date >= today ? date : "");
-      reset({ ...getValues(), ...draft, eventDate: fresh(draft.eventDate), altDate: fresh(draft.altDate) });
+      reset({ ...getValues(), ...draft, eventDate: initialDate ?? fresh(draft.eventDate), altDate: fresh(draft.altDate) });
     } catch {
       // Nothing usable saved.
     }
-  }, [getValues, reset, today]);
+  }, [getValues, initialDate, reset, today]);
 
   // Only what the customer changes is saved (`name` is empty for a reset), so restoring can't overwrite the draft.
   useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { EnquiryInputSchema, INDIAN_MOBILE, type EnquiryFormValues, type IdDocumentType, type OnboardingProfile } from "@repo/schemas";
+import { EnquiryInputSchema, INDIAN_MOBILE, type AssistantChatInput, type EnquiryFormValues, type IdDocumentType, type OnboardingProfile } from "@repo/schemas";
 import { ACCOUNT_MANAGER, DEMO_OTP } from "@repo/mock/internal";
 import {
   ApiError,
@@ -29,6 +29,7 @@ import { toCustomerLead, toTalentBooking } from "@repo/mock/serializers";
 import { contractPdfData, quotePdfData } from "@repo/mock/documents";
 import { recordLogin } from "@repo/mock/login-events";
 import { assertCanSignIn, canUseAccount } from "@repo/mock/users";
+import { assistantChat, assistantStatus } from "@repo/mock/assistant";
 import { addOnboardingDocument, ensureOnboardingDraft, onboardingState, ownDocumentUrl, removeOnboardingDocument, saveOnboarding, submitOnboarding } from "@repo/mock/onboarding";
 import { pdfFonts, saveBlob } from "@/lib/download";
 import { loadDb, mutate, readSessionUserId, resetDb, writeSessionUserId } from "@repo/mock/store";
@@ -461,6 +462,11 @@ export const mockApi = {
 
   newsletter: {
     subscribe: (email: string) => call(() => mutate((db) => subscribeNewsletter(db, email))),
+  },
+
+  assistant: {
+    status: () => call(() => assistantStatus(loadDb())),
+    chat: (input: AssistantChatInput) => call(() => assistantChat(loadDb(), input)),
   },
 
   /** Catalogue reads for client components (server pages use lib/catalogue.ts). */

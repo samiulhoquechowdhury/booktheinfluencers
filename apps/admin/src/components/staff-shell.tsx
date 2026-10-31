@@ -22,6 +22,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; roles?: 
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/staff", label: "Staff", icon: UserCog, roles: ["SUPER_ADMIN"] },
   { href: "/website", label: "Website", icon: Globe, roles: ["SUPER_ADMIN"] },
+  { href: "/api-keys", label: "API", icon: KeyRound, roles: ["SUPER_ADMIN"] },
   { href: "/audit", label: "Audit log", icon: ScrollText, roles: ["SUPER_ADMIN"] },
 ];
 

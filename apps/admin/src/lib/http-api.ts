@@ -2,7 +2,7 @@
 
 import { ApiError } from "@repo/mock/server";
 import { STAFF_ROLES, type StaffRole } from "@repo/mock/internal";
-import type { FollowUpRecord, HeroSlideRecord, ImportResult, ReconciliationOverview, ReconciliationRunRecord, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword, UserDetail, UsersPage, VerificationDetail, VerificationRow } from "@repo/schemas";
+import type { AssistantSettings, FollowUpRecord, HeroSlideRecord, ImportResult, ReconciliationOverview, ReconciliationRunRecord, SignInsPage, StaffAccount, StaffRoleName, TalentAdminDetail, TalentCalendar, TemporaryPassword, UserDetail, UsersPage, VerificationDetail, VerificationRow } from "@repo/schemas";
 import { saveBlob } from "./download";
 import type { mockApi, LeadDetail, LeadRow, StaffSession } from "./mock-api";
 
@@ -302,6 +302,13 @@ export const httpApi: typeof mockApi = {
   documents: {
     quotePdf: (quoteId) => download(`/admin/quotes/${id(quoteId)}/pdf`),
     contractPdf: (contractId) => download(`/admin/contracts/${id(contractId)}/pdf`),
+  },
+
+  assistant: {
+    settings: () => request<AssistantSettings>("/admin/assistant"),
+    save: (input) => request<AssistantSettings>("/admin/assistant", { method: "PUT", body: input }),
+    test: () => post<{ ok: boolean }>("/admin/assistant/test"),
+    remove: () => request<{ ok: boolean }>("/admin/assistant", { method: "DELETE" }),
   },
 
   users: {

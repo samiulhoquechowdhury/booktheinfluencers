@@ -11,7 +11,8 @@ import { pdfFonts, saveBlob } from "./download";
 import { createFollowUp, followUpsFor, myFollowUps, nextFollowUpAt, updateFollowUp } from "@repo/mock/follow-ups";
 import { signIns } from "@repo/mock/login-events";
 import { listUsers, restoreUser, restrictUser, signOutUser, userDetail } from "@repo/mock/users";
-import type { AccountRestrictInput, UserFilters } from "@repo/schemas";
+import { assistantSettings, removeAssistantKey, saveAssistantSettings, testAssistant } from "@repo/mock/assistant";
+import type { AccountRestrictInput, AssistantSettingsInput, UserFilters } from "@repo/schemas";
 import { approveArtist, rejectArtist, staffDocumentUrl, verificationDetail, verificationQueue } from "@repo/mock/onboarding";
 import { createHero, deleteHero, listHero, reorderHero, updateHero, uploadMedia } from "@repo/mock/site";
 import {
@@ -202,6 +203,13 @@ export const mockApi = {
       const { buildContractPdf, pdfFileName } = await import("@repo/pdf");
       saveBlob(new Blob([(await buildContractPdf(data, await pdfFonts())) as BlobPart], { type: "application/pdf" }), pdfFileName("contract", data.ref));
     },
+  },
+
+  assistant: {
+    settings: () => call(() => assistantSettings(loadDb(), actor())),
+    save: (input: AssistantSettingsInput) => call(() => mutate((db) => saveAssistantSettings(db, actor(), input))),
+    test: () => call(() => testAssistant(loadDb(), actor())),
+    remove: () => call(() => mutate((db) => removeAssistantKey(db, actor()))),
   },
 
   users: {

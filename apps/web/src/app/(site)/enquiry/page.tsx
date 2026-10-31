@@ -26,8 +26,9 @@ export default function EnquiryPage({ searchParams }: PageProps<"/enquiry">) {
 }
 
 async function Form({ searchParams }: { searchParams: PageProps<"/enquiry">["searchParams"] }) {
-  const raw = (await searchParams).talent;
+  const { talent: raw, date } = await searchParams;
   const talents = (Array.isArray(raw) ? raw.join(",") : (raw ?? "")).split(",").filter(Boolean);
+  const initialDate = typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
   // A different artist starts a fresh brief.
-  return <EnquiryForm key={talents.join()} initialTalents={talents} />;
+  return <EnquiryForm key={`${talents.join()}|${initialDate}`} initialTalents={talents} initialDate={initialDate} />;
 }

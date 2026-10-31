@@ -15,14 +15,14 @@ const HEADER = MAGIC.length + IV + TAG + KEY + IV + TAG;
 
 const masterKey = () => Buffer.from(env.ID_DOCUMENT_KEY, "base64");
 
-function encrypt(key: Buffer, plain: Buffer, aad: string) {
+export function encrypt(key: Buffer, plain: Buffer, aad: string) {
   const iv = randomBytes(IV);
   const cipher = createCipheriv("aes-256-gcm", key, iv).setAAD(Buffer.from(aad));
   const body = Buffer.concat([cipher.update(plain), cipher.final()]);
   return { iv, tag: cipher.getAuthTag(), body };
 }
 
-function decrypt(key: Buffer, iv: Buffer, tag: Buffer, body: Buffer, aad: string) {
+export function decrypt(key: Buffer, iv: Buffer, tag: Buffer, body: Buffer, aad: string) {
   const decipher = createDecipheriv("aes-256-gcm", key, iv).setAAD(Buffer.from(aad)).setAuthTag(tag);
   return Buffer.concat([decipher.update(body), decipher.final()]);
 }

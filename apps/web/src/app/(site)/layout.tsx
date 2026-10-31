@@ -1,3 +1,4 @@
+import { AssistantChat } from "@/components/assistant/assistant-chat";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
@@ -7,6 +8,7 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
       <SiteHeader />
       <main className="flex flex-1 flex-col">{children}</main>
       <SiteFooter />
+      <AssistantChat />
     </>
   );
 }

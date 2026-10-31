@@ -12,7 +12,7 @@ import { LISTED } from "./listed";
 const PAGE_SIZE = 12;
 
 /** Budget bands mirror the website's filter (paise). */
-const BUDGETS: Record<string, { min?: bigint; max?: bigint }> = {
+export const BUDGETS: Record<string, { min?: bigint; max?: bigint }> = {
   "under-1l": { max: 10_000_000n },
   "1l-3l": { min: 10_000_000n, max: 30_000_000n },
   "3l-5l": { min: 30_000_000n, max: 50_000_000n },
@@ -39,8 +39,43 @@ const Filters = z.object({
     .optional(),
 });
 
-const talentInclude = { categories: { include: { category: true } }, reps: { include: { rep: true } } } satisfies Prisma.TalentInclude;
-type TalentRow = Prisma.TalentGetPayload<{ include: typeof talentInclude }>;
+type TalentMatch = Pick<z.infer<typeof Filters>, "q" | "category" | "city" | "budget" | "date"> & Partial<Pick<z.infer<typeof Filters>, "slugs" | "eventType" | "language" | "verified">>;
+
+/** Listed talent matching the filters. Shared with the website assistant, so it searches exactly like the site. */
+export function talentWhere(f: TalentMatch): Prisma.TalentWhereInput {
+  const band = f.budget ? BUDGETS[f.budget] : undefined;
+  return {
+    ...LISTED,
+    ...(f.slugs && { slug: { in: f.slugs } }),
+    ...(f.category && { categories: { some: { category: { slug: f.category } } } }),
+    ...(f.eventType && { eventTypes: { has: f.eventType } }),
+    ...(f.language && { languages: { has: f.language } }),
+    ...(f.verified && { reps: { some: { rep: { verification: "VERIFIED" } } } }),
+    ...(f.date && { blackouts: { none: { date: f.date } } }),
+    ...(f.city && {
+      OR: [
+        { baseCity: { equals: f.city, mode: "insensitive" } },
+        { travelsTo: { hasSome: [f.city, "Pan-India", "International"] } },
+      ],
+    }),
+    // Budget and keyword conditions share one AND list, so neither filter replaces the other.
+    AND: [
+      ...(band?.min !== undefined ? [{ feeBandMaxPaise: { gte: band.min } }] : []),
+      ...(band?.max !== undefined ? [{ feeBandMinPaise: { lte: band.max } }] : []),
+      ...(f.q ?? "").split(/\s+/).filter(Boolean).map((word) => ({
+        OR: [
+          { stageName: { contains: word, mode: "insensitive" as const } },
+          { headline: { contains: word, mode: "insensitive" as const } },
+          { bio: { contains: word, mode: "insensitive" as const } },
+          { tags: { has: word.toLowerCase() } },
+        ],
+      })),
+    ],
+  };
+}
+
+export const talentInclude = { categories: { include: { category: true } }, reps: { include: { rep: true } } } satisfies Prisma.TalentInclude;
+export type TalentRow = Prisma.TalentGetPayload<{ include: typeof talentInclude }>;
 
 function toSummary(t: TalentRow): TalentSummary {
   return TalentSummarySchema.parse({
@@ -88,35 +123,7 @@ export class CatalogueController {
   @Get("talents")
   async list(@Query() query: unknown) {
     const f = parse(Filters, query);
-    const band = f.budget ? BUDGETS[f.budget] : undefined;
-    const where: Prisma.TalentWhereInput = {
-      ...LISTED,
-      ...(f.slugs && { slug: { in: f.slugs } }),
-      ...(f.category && { categories: { some: { category: { slug: f.category } } } }),
-      ...(f.eventType && { eventTypes: { has: f.eventType } }),
-      ...(f.language && { languages: { has: f.language } }),
-      ...(f.verified && { reps: { some: { rep: { verification: "VERIFIED" } } } }),
-      ...(f.date && { blackouts: { none: { date: f.date } } }),
-      ...(f.city && {
-        OR: [
-          { baseCity: { equals: f.city, mode: "insensitive" } },
-          { travelsTo: { hasSome: [f.city, "Pan-India", "International"] } },
-        ],
-      }),
-      // Budget and keyword conditions share one AND list, so neither filter replaces the other.
-      AND: [
-        ...(band?.min !== undefined ? [{ feeBandMaxPaise: { gte: band.min } }] : []),
-        ...(band?.max !== undefined ? [{ feeBandMinPaise: { lte: band.max } }] : []),
-        ...(f.q ?? "").split(/\s+/).filter(Boolean).map((word) => ({
-          OR: [
-            { stageName: { contains: word, mode: "insensitive" as const } },
-            { headline: { contains: word, mode: "insensitive" as const } },
-            { bio: { contains: word, mode: "insensitive" as const } },
-            { tags: { has: word.toLowerCase() } },
-          ],
-        })),
-      ],
-    };
+    const where = talentWhere(f);
     const orderBy: Prisma.TalentOrderByWithRelationInput[] =
       f.sort === "fee-asc"
         ? [{ feeBandMinPaise: "asc" }]

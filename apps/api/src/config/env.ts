@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const DEV_SECRET = "dev-only-secret-change-me-0123456789abcdef";
 const DEV_DOCUMENT_KEY = "ZGV2LW9ubHktaWQta2V5LW5vdC1mb3ItcHJvZC11c2U=";
+const DEV_SETTINGS_KEY = "ZGV2LW9ubHktc2V0dGluZ3Mta2V5LW5vdC1wcm9kISE=";
 
 const EnvSchema = z
   .object({
@@ -19,6 +20,13 @@ const EnvSchema = z
       .string()
       .default(DEV_DOCUMENT_KEY)
       .refine((v) => Buffer.from(v, "base64").length === 32, "Must be 32 bytes, base64 encoded"),
+    /** 32 random bytes, base64. Encrypts API keys saved in the CRM. Losing it only means saving them again. */
+    SETTINGS_KEY: z
+      .string()
+      .default(DEV_SETTINGS_KEY)
+      .refine((v) => Buffer.from(v, "base64").length === 32, "Must be 32 bytes, base64 encoded"),
+    /** Grok's API. Only changed in tests. */
+    XAI_BASE_URL: z.string().url().default("https://api.x.ai/v1"),
     /** Comma-separated browser origins allowed by CORS. */
     CORS_ORIGINS: z.string().default("http://localhost:3000,http://localhost:3001"),
     /** Demo shortcuts — never in production (docs/runbook.md). */
@@ -34,6 +42,7 @@ const EnvSchema = z
       if (env[key] === DEV_SECRET) ctx.addIssue({ code: "custom", path: [key], message: `${key} must be set in production` });
     }
     if (env.ID_DOCUMENT_KEY === DEV_DOCUMENT_KEY) ctx.addIssue({ code: "custom", path: ["ID_DOCUMENT_KEY"], message: "ID_DOCUMENT_KEY must be set in production" });
+    if (env.SETTINGS_KEY === DEV_SETTINGS_KEY) ctx.addIssue({ code: "custom", path: ["SETTINGS_KEY"], message: "SETTINGS_KEY must be set in production" });
   });
 
 export type Env = z.infer<typeof EnvSchema>;

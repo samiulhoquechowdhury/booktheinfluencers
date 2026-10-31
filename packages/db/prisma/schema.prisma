@@ -770,3 +770,14 @@ model TalentDocument {
 
   @@index([talentId])
 }
+
+/// The website assistant's Grok connection (CRM → API). One row. The key is encrypted with SETTINGS_KEY.
+model AssistantConfig {
+  id            String   @id @default("grok")
+  sealedKey     Bytes
+  keyHint       String
+  model         String
+  enabled       Boolean  @default(true)
+  updatedByName String
+  updatedAt     DateTime @updatedAt
+}

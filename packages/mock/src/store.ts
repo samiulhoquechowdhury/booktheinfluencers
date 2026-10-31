@@ -79,6 +79,7 @@ function upgrade(db: MockDb): MockDb {
   }
   db.media ??= {};
   db.loginEvents ??= [];
+  db.assistant ??= null;
   db.followUps ??= [];
   db.reconciliationRuns ??= [];
   db.onboarding ??= {};
