@@ -17,8 +17,8 @@ export default function OverviewPage() {
 
   const maxStage = Math.max(1, ...PIPELINE_COLUMNS.map((s) => data.byStage[s] ?? 0));
   const attention = [
-    data.pendingApprovals > 0 && { href: "/pipeline?stage=QUOTE_SENT", text: `${data.pendingApprovals} quote${data.pendingApprovals > 1 ? "s" : ""} waiting for approval` },
-    (data.byStage.NEW ?? 0) > 0 && { href: "/pipeline?stage=NEW", text: `${data.byStage.NEW} new lead${(data.byStage.NEW ?? 0) > 1 ? "s" : ""} to contact` },
+    data.pendingApprovals > 0 && { href: "/enquiries", text: `${data.pendingApprovals} quote${data.pendingApprovals > 1 ? "s" : ""} waiting for approval` },
+    (data.byStage.NEW ?? 0) > 0 && { href: "/enquiries", text: `${data.byStage.NEW} new lead${(data.byStage.NEW ?? 0) > 1 ? "s" : ""} to contact` },
     data.newApplications > 0 && { href: "/inbox", text: `${data.newApplications} new artist application${data.newApplications > 1 ? "s" : ""}` },
     data.newContactRequests > 0 && { href: "/inbox", text: `${data.newContactRequests} contact request${data.newContactRequests > 1 ? "s" : ""}` },
   ].filter(Boolean) as { href: string; text: string }[];
@@ -65,7 +65,7 @@ export default function OverviewPage() {
             const count = data.byStage[stage] ?? 0;
             return (
               <li key={stage}>
-                <Link href={`/pipeline?stage=${stage}`} className="grid grid-cols-[160px_1fr_32px] items-center gap-3 rounded-md px-1 py-1 text-sm hover:bg-cream-soft">
+                <Link href="/enquiries" className="grid grid-cols-[160px_1fr_32px] items-center gap-3 rounded-md px-1 py-1 text-sm hover:bg-cream-soft">
                   <span className="truncate text-ink-soft">{STAGE_LABELS[stage]}</span>
                   <span className="h-2.5 overflow-hidden rounded-full bg-cream">
                     <span className="block h-full rounded-full bg-gold" style={{ width: `${(count / maxStage) * 100}%` }} />

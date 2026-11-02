@@ -110,6 +110,8 @@ function leadRow(db: MockDb, lead: LeadRec) {
     valuePaise: latestTotal > 0n ? String(latestTotal) : null,
     bookings: bookings.map((b) => ({ id: b.id, slug: b.talentSlug, name: talentOf(b.talentSlug)?.stageName ?? b.talentSlug, availability: b.availability })),
     nextFollowUpAt: nextFollowUpAt(db, lead.id),
+    /** A quote is waiting for a super admin, so the customer hasn't seen it yet. */
+    awaitingApproval: bookings.some((b) => quotesOf(db, b.id).some((q) => q.status === "PENDING_APPROVAL")),
   };
 }
 export type LeadRow = ReturnType<typeof leadRow>;

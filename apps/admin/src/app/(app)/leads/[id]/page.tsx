@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Check, Hourglass, Lock, Phone, Plus, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Hourglass, Lock, Phone, Plus } from "lucide-react";
 import { canTransition, formatDateTime, formatDateWithWeekday, type LeadStage } from "@repo/utils";
 import { BUDGET_BANDS } from "@repo/mock/catalogue/data";
 import { api, can, errorMessage, type LeadDetail, type StaffUser } from "@/lib/api";
@@ -14,6 +14,7 @@ import { FINISHED, PHASES, nextStep, phaseIndex } from "@/lib/lead-guide";
 import { Card, Failure, Loading, Modal, Pill, inputClass } from "@/components/ui";
 import { FollowUps } from "@/components/lead/follow-ups";
 import { BookingPanel } from "@/components/lead/booking-panel";
+import { CustomerMessages } from "@/components/lead/customer-messages";
 
 /** Moves staff make by hand. The rest happen by themselves as quotes, signatures and payments come in. */
 const MOVE_LABELS: Partial<Record<LeadStage, string>> = {
@@ -40,9 +41,9 @@ function Workspace({ lead, staff }: { lead: LeadDetail; staff: StaffUser }) {
   return (
     <div className="space-y-5">
       <div>
-        <Link href="/pipeline" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink">
+        <Link href={`/enquiries/${lead.id}`} className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink">
           <ArrowLeft className="size-4" aria-hidden />
-          Pipeline
+          Back to the enquiry
         </Link>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
@@ -300,39 +301,6 @@ function Brief({ lead }: { lead: LeadDetail }) {
           </div>
         ))}
       </dl>
-    </Card>
-  );
-}
-
-function CustomerMessages({ lead }: { lead: LeadDetail }) {
-  const [body, setBody] = useState("");
-  const send = useStaffMutation((text: string) => api.leads.reply(lead.id, text), "Reply sent");
-  return (
-    <Card title={`Messages with ${lead.customer.name.split(" ")[0]}`}>
-      {lead.messages.length === 0 ? (
-        <p className="text-sm text-muted">No messages yet.</p>
-      ) : (
-        <ul className="max-h-72 space-y-2 overflow-y-auto">
-          {lead.messages.map((m) => (
-            <li key={m.id} className={`rounded-md px-3 py-2 text-sm ${m.author === "staff" ? "ml-6 bg-ink text-white" : "mr-6 bg-cream"}`}>
-              <span className="text-xs font-semibold opacity-70">{m.authorName} · {formatDateTime(m.at)}</span>
-              <p className="whitespace-pre-wrap">{m.body}</p>
-            </li>
-          ))}
-        </ul>
-      )}
-      <form
-        className="mt-3 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send.mutate(body, { onSuccess: () => setBody("") });
-        }}
-      >
-        <input value={body} onChange={(e) => setBody(e.target.value)} placeholder="Reply to the customer…" aria-label="Reply to the customer" className={`${inputClass} min-w-0 flex-1`} />
-        <button type="submit" disabled={!body.trim() || send.isPending} aria-label="Send" className="btn btn-dark btn-sm disabled:opacity-50">
-          <Send aria-hidden />
-        </button>
-      </form>
     </Card>
   );
 }

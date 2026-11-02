@@ -13,7 +13,7 @@ import { Loading } from "./ui";
 
 const NAV: { href: string; label: string; icon: typeof LayoutDashboard; roles?: StaffRole[] }[] = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/pipeline", label: "Pipeline", icon: ClipboardList },
+  { href: "/enquiries", label: "Enquiries", icon: ClipboardList },
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/payouts", label: "Payouts", icon: Wallet, roles: ["ACCOUNTS"] },
   { href: "/talents", label: "Talents", icon: Users },

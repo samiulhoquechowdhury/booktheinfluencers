@@ -102,6 +102,8 @@ export class StaffService {
         bookings: lead.bookings.map((b) => ({ id: b.id, slug: b.talent.slug, name: b.talent.stageName, availability: b.availability })),
         /** Soonest open follow-up, for the pipeline badge. */
         nextFollowUpAt: lead.followUps[0]?.dueAt.toISOString() ?? null,
+        /** A quote is waiting for a super admin, so the customer hasn't seen it yet. */
+        awaitingApproval: lead.bookings.some((b) => b.quotes.some((q) => q.status === "PENDING_APPROVAL")),
       };
     });
   }
