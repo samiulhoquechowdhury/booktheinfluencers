@@ -32,13 +32,13 @@ export const keys = {
 export const useStaffSession = () => useQuery({ queryKey: keys.session, queryFn: api.auth.session, staleTime: Infinity });
 
 /** A staff mutation: refreshes every view (one change can move pipeline, payments and analytics) and toasts. */
-export function useStaffMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>, success?: string) {
+export function useStaffMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>, success?: string | ((result: TResult) => string)) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => {
+    onSuccess: (result) => {
       void client.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "staff" });
-      if (success) toast.success(success);
+      if (success) toast.success(typeof success === "function" ? success(result) : success);
     },
     onError: (error) => toast.error(errorMessage(error)),
   });

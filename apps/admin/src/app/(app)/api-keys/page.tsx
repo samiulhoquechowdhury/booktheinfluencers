@@ -31,9 +31,11 @@ function GrokCard({ saved }: { saved: AssistantSettings }) {
   const [model, setModel] = useState(saved.model);
   const [confirming, setConfirming] = useState(false);
 
-  const save = useStaffMutation((enabled: boolean) => api.assistant.save({ apiKey: apiKey.trim() || undefined, model: model.trim(), enabled }), "Saved. The assistant is using these settings now.");
+  const save = useStaffMutation((enabled: boolean) => api.assistant.save({ apiKey: apiKey.trim() || undefined, model: model.trim(), enabled }), (result) =>
+    result.enabled ? `Grok is connected and answering on the website, using ${result.model}.` : "Grok is off. The website chat uses built-in answers.",
+  );
   const test = useStaffMutation(() => api.assistant.test(), "Grok is connected and answering.");
-  const remove = useStaffMutation(() => api.assistant.remove(), "Key removed. The assistant is off.");
+  const remove = useStaffMutation(() => api.assistant.remove(), "Key removed. The website chat uses built-in answers.");
   const busy = save.isPending || test.isPending || remove.isPending;
   const canSave = Boolean(model.trim()) && (Boolean(apiKey.trim()) || saved.configured) && !busy;
   const tone = saved.enabled ? "success" : saved.configured ? "action" : "neutral";
@@ -44,7 +46,7 @@ function GrokCard({ saved }: { saved: AssistantSettings }) {
       actions={<Pill tone={tone}>{saved.enabled ? "On" : saved.configured ? "Off" : "Not connected"}</Pill>}
     >
       <p className="text-sm text-muted">
-        The chat button is always on the website: visitors find artists, check dates and send a brief from it. With Grok on, it understands questions in any wording. Without a key, or if Grok fails or runs out of credit, simple built-in matching answers instead. Create a key at console.x.ai.
+        The chat button is always on the website: visitors find artists, check dates and send a brief from it. With Grok on, it understands questions in any wording. Without a key, or if Grok fails or runs out of credit, simple built-in matching answers instead. Create a key at console.x.ai, paste it here and press Save: we check it with a real question first, and pick a model your key can use if the one below isn't available to it.
       </p>
       {!USING_API && <p className="mt-3 rounded-md bg-cream px-3 py-2 text-sm text-ink-soft">Demo mode: only the last 4 characters are kept, Grok isn't called, and simple matching answers the chat.</p>}
 

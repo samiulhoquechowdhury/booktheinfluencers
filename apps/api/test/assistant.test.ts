@@ -20,7 +20,7 @@ const startStub = () =>
       req.on("data", (chunk) => (raw += chunk));
       req.on("end", () => {
         seen.push({ headers: req.headers, body: JSON.parse(raw) });
-        const turn = turns.shift() ?? { text: "OK" };
+        const turn = turns.shift() ?? reply("Hello! What are you planning?");
         res.setHeader("content-type", "application/json");
         if ("status" in turn) {
           res.statusCode = turn.status;
@@ -125,6 +125,26 @@ describe("website assistant", () => {
 
     turns = [{ status: 403, body: '{"error":"no credits"}' }];
     expect((await connect({ apiKey: KEY, model: "grok-4.7", enabled: true }).expect(422)).body.error.message).toMatch(/credits/);
+  });
+
+  it("tests a new key with a real first turn, tools and all", async () => {
+    await connect({ apiKey: KEY, model: "grok-4.7", enabled: true }).expect(200);
+    expect(seen[0]!.body).toMatchObject({ model: "grok-4.7", tool_choice: "required" });
+    expect(seen[0]!.body.tools.map((t: { name: string }) => t.name)).toContain("start_booking");
+  });
+
+  it("picks a model the key can use when the one asked for isn't available", async () => {
+    turns = [{ status: 404, body: '{"error":"The model grok-4.7 does not exist or your team does not have access to it."}' }];
+    const saved = (await connect({ apiKey: KEY, model: "grok-4.7", enabled: true }).expect(200)).body;
+    expect(saved.model).toBe("grok-4.6");
+    expect(seen.map((r) => r.body.model)).toEqual(["grok-4.7", "grok-4.6"]);
+  });
+
+  it("won't save a model that can't call the assistant's tools", async () => {
+    turns = [{ text: "Hi" }, { text: "Hi" }, { text: "Hi" }, { text: "Hi" }];
+    const res = await connect({ apiKey: KEY, model: "grok-4.7", enabled: true }).expect(422);
+    expect(res.body.error.message).toMatch(/can't call the tools/);
+    expect(await ctx.db.assistantConfig.count()).toBe(0);
   });
 
   it("can be turned off, tested and removed", async () => {

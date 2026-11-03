@@ -13,7 +13,7 @@ type GrokOutput =
   | { type: string };
 export type GrokResponse = { id: string; output: GrokOutput[] };
 
-export type GrokFailure = "key" | "credit" | "model" | "busy" | "down";
+export type GrokFailure = "key" | "credit" | "model" | "tools" | "busy" | "down";
 
 export class GrokError extends Error {
   constructor(readonly reason: GrokFailure) {
@@ -23,22 +23,27 @@ export class GrokError extends Error {
 
 const TIMEOUT_MS = 30_000;
 
+/** xAI's messages differ by status, so the words matter more than the code: "no credits" can come back as a 403 that also mentions the key. */
 function failureOf(status: number, detail: string): GrokFailure {
-  if (status === 429) return "busy";
+  if (status === 429 && !/credit|spending|limit reached/i.test(detail)) return "busy";
+  if (/credit|billing|spending|payment|licen[cs]e/i.test(detail) || status === 402) return "credit";
   if (status === 401 || /api[ -]?key/i.test(detail)) return "key";
   if (status === 404 || /model/i.test(detail)) return "model";
-  if (status === 402 || status === 403) return "credit";
+  if (status === 403) return "credit";
   return "down";
 }
 
-export async function respond(key: string, body: { model: string; input: GrokInput[]; tools?: GrokTool[]; tool_choice?: "required"; previous_response_id?: string }) {
+/** `deadline` (a Date.now() time) caps the whole answer, so a slow model can't outlast the website's request. */
+export async function respond(key: string, body: { model: string; input: GrokInput[]; tools?: GrokTool[]; tool_choice?: "required"; previous_response_id?: string }, deadline = Date.now() + TIMEOUT_MS) {
+  const left = Math.min(TIMEOUT_MS, deadline - Date.now());
+  if (left < 1000) throw new GrokError("down");
   let res: Response;
   try {
     res = await fetch(`${env.XAI_BASE_URL}/responses`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(left),
     });
   } catch {
     throw new GrokError("down");

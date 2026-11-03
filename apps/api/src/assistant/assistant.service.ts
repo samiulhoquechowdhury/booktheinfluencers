@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { OFF_TOPIC_REPLY, type AssistantChatInput, type AssistantReply, type AssistantSettings, type AssistantSettingsInput, type AssistantStatus, DEFAULT_ASSISTANT_MODEL } from "@repo/schemas";
+import { ASSISTANT_MODELS, OFF_TOPIC_REPLY, type AssistantChatInput, type AssistantReply, type AssistantSettings, type AssistantSettingsInput, type AssistantStatus, DEFAULT_ASSISTANT_MODEL } from "@repo/schemas";
 import { toIstDateKey } from "@repo/utils";
 import type { AuthUser } from "../auth/guard";
 import { DomainError } from "../common/errors";
@@ -15,6 +15,9 @@ const IV = 12;
 const TAG = 16;
 const AAD = "assistant-grok-key";
 const MAX_ROUNDS = 5;
+/** The website and CRM reach the API through a proxy that gives up after 30 seconds, so Grok gets less than that. */
+const CHAT_BUDGET_MS = 22_000;
+const SETUP_BUDGET_MS = 25_000;
 const REPLY_MAX = 1200;
 
 /** Every Grok message spends money on the saved key, and the chat is open to anyone. Past these, the built-in answers take over. */
@@ -25,7 +28,8 @@ const SITE_WIDE = { limit: 600, windowMs: 60 * 60_000 };
 const WHY: Record<GrokFailure, string> = {
   key: "Grok rejected this API key. Check it and try again.",
   credit: "This key can't be used yet. Check that your xAI team has credits.",
-  model: "Grok doesn't recognise that model. Check the name.",
+  model: "This key can't use any of the Grok models we tried. Check the model name, or your xAI team's model access.",
+  tools: "This model can't call the tools the assistant needs. Pick another model, such as grok-4.7.",
   busy: "Grok is limiting requests on this key. Try again in a minute.",
   down: "Couldn't reach Grok. Check the connection and try again.",
 };
@@ -77,13 +81,34 @@ export class AssistantService {
     };
   }
 
-  private async ping(key: string, model: string) {
-    try {
-      await respond(key, { model, input: [{ role: "user", content: "Reply with OK." }] });
-    } catch (error) {
-      if (error instanceof GrokError) throw new DomainError("GROK_REFUSED", WHY[error.reason], 422);
-      throw error;
+  private async tools() {
+    const categories = await this.prisma.db.category.findMany({ select: { slug: true } });
+    return toolDefinitions(categories.map((c) => c.slug));
+  }
+
+  /** A real first turn of a chat, with our prompt and tools, so a key that saves is a key that works on the website. */
+  private async ping(key: string, model: string, deadline = Date.now() + SETUP_BUDGET_MS) {
+    const input: GrokInput[] = [{ role: "system", content: systemPrompt(toIstDateKey(new Date())) }, { role: "user", content: "Hi" }];
+    const response = await respond(key, { model, input, tools: await this.tools(), tool_choice: "required" }, deadline);
+    if (toolCalls(response).length === 0) throw new GrokError("tools");
+  }
+
+  /** The model asked for first, then the others we know, newest first: a key from a team without the newest model still connects. */
+  private async workingModel(key: string, wanted: string) {
+    const deadline = Date.now() + SETUP_BUDGET_MS;
+    const candidates = [wanted, ...ASSISTANT_MODELS.filter((m) => m !== wanted)];
+    let failure: GrokFailure = "model";
+    for (const model of candidates) {
+      try {
+        await this.ping(key, model, deadline);
+        return model;
+      } catch (error) {
+        if (!(error instanceof GrokError)) throw error;
+        failure = error.reason;
+        if (error.reason !== "model" && error.reason !== "tools") break;
+      }
     }
+    throw new DomainError("GROK_REFUSED", WHY[failure], 422);
   }
 
   private savedKey(row: { sealedKey: Uint8Array }) {
@@ -108,11 +133,11 @@ export class AssistantService {
     if (entered && entered.length < 20) throw new DomainError("KEY_INVALID", "That doesn't look like an API key.", 422);
     if (!entered && !row) throw new DomainError("KEY_REQUIRED", "Enter your Grok API key.", 422);
     const key = entered ?? this.savedKey(row!);
-    if (entered || input.model !== row?.model) await this.ping(key, input.model);
+    const model = entered || input.model !== row?.model ? await this.workingModel(key, input.model) : input.model;
 
-    const changes = [entered && "a new key", input.model !== row?.model && `model ${input.model}`, input.enabled !== row?.enabled && (input.enabled ? "turned on" : "turned off")].filter(Boolean).join(", ");
+    const changes = [entered && "a new key", model !== row?.model && `model ${model}`, input.enabled !== row?.enabled && (input.enabled ? "turned on" : "turned off")].filter(Boolean).join(", ");
     const updatedByName = await this.audit(user, "assistant.settings", `Updated the Grok assistant: ${changes || "no changes"}`);
-    const data = { sealedKey: sealKey(key), keyHint: entered ? key.slice(-4) : row!.keyHint, model: input.model, enabled: input.enabled, updatedByName };
+    const data = { sealedKey: sealKey(key), keyHint: entered ? key.slice(-4) : row!.keyHint, model, enabled: input.enabled, updatedByName };
     await this.prisma.db.assistantConfig.upsert({ where: { id: "grok" }, create: data, update: data });
     return this.settings();
   }
@@ -120,7 +145,12 @@ export class AssistantService {
   async test() {
     const row = await this.config();
     if (!row) throw new DomainError("KEY_REQUIRED", "Save a Grok API key first.", 422);
-    await this.ping(this.savedKey(row), row.model);
+    try {
+      await this.ping(this.savedKey(row), row.model);
+    } catch (error) {
+      if (error instanceof GrokError) throw new DomainError("GROK_REFUSED", WHY[error.reason], 422);
+      throw error;
+    }
     return { ok: true };
   }
 
@@ -169,9 +199,8 @@ export class AssistantService {
    * that isn't about booking gets our fixed words, not whatever the model might write. Cards come from tool results.
    */
   private async grokChat(key: string, model: string, input: AssistantChatInput): Promise<AssistantReply> {
-
-    const categories = await this.prisma.db.category.findMany({ select: { slug: true } });
-    const tools = toolDefinitions(categories.map((c) => c.slug));
+    const deadline = Date.now() + CHAT_BUDGET_MS;
+    const tools = await this.tools();
     let request: GrokInput[] = [{ role: "system", content: systemPrompt(toIstDateKey(new Date())) }, ...input.messages];
     let previous: string | undefined;
     let found: ToolResult | null = null;
@@ -180,7 +209,7 @@ export class AssistantService {
       declined ? { reply, talents: [], date: null, declined, booking: null } : { reply, talents: found?.talents ?? [], date: found?.date ?? booking?.date ?? null, declined, booking };
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await respond(key, { model, input: request, tools, tool_choice: "required", previous_response_id: previous });
+      const response = await respond(key, { model, input: request, tools, tool_choice: "required", previous_response_id: previous }, deadline);
       const calls = toolCalls(response);
       if (calls.some((c) => c.name === DECLINE_TOOL)) return finish(OFF_TOPIC_REPLY, true);
       const answer = calls.find((c) => c.name === REPLY_TOOL);
