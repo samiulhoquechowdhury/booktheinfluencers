@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OFF_TOPIC_REPLY } from "@repo/schemas";
+import { OFF_TOPIC_REPLY, eventTypeIn } from "@repo/schemas";
 import { assistantChat, assistantStatus, dateIn, removeAssistantKey, saveAssistantSettings, testAssistant } from "./assistant";
 import { buildSeed } from "./seed";
 import type { StaffUser } from "./internal";
@@ -42,13 +42,31 @@ describe("demo assistant", () => {
     expect(testAssistant(db, admin)).toEqual({ ok: true });
   });
 
-  it("can be turned off, and only by the super admin", () => {
+  it("keeps answering with Grok turned off, and only the super admin can change it", () => {
     const db = buildSeed();
+    expect(assistantStatus(db).ai).toBe(false);
     expect(() => saveAssistantSettings(db, sales, { apiKey: "xai-a-demo-key-0123456789", model: "grok-4.7", enabled: true })).toThrow();
-    saveAssistantSettings(db, admin, { apiKey: "xai-a-demo-key-0123456789", model: "grok-4.7", enabled: false });
-    expect(assistantStatus(db).available).toBe(false);
-    expect(() => ask(db, "hello")).toThrow();
+    saveAssistantSettings(db, admin, { apiKey: "xai-a-demo-key-0123456789", model: "grok-4.7", enabled: true });
+    expect(assistantStatus(db).ai).toBe(true);
+    saveAssistantSettings(db, admin, { model: "grok-4.7", enabled: false });
+    expect(assistantStatus(db).ai).toBe(false);
+    expect(ask(db, "hello").declined).toBe(false);
     removeAssistantKey(db, admin);
-    expect(assistantStatus(db).available).toBe(true);
+    expect(assistantStatus(db).ai).toBe(false);
+  });
+
+  it("starts a brief when the customer wants to book, with the artist only if they're free", () => {
+    const db = buildSeed();
+    expect(ask(db, `book meera iyer for my wedding on ${FUTURE} in mumbai`).booking).toEqual({ talentSlugs: ["meera-iyer"], date: FUTURE, city: "Mumbai", eventType: "Wedding", budgetBand: null });
+    db.calendar["meera-iyer"] = [{ date: FUTURE, source: "artist", note: null, bookingId: null }];
+    expect(ask(db, `book meera iyer on ${FUTURE}`).booking?.talentSlugs).toEqual([]);
+    expect(ask(db, "is meera iyer free?").booking).toBeNull();
+    expect(ask(db, "how does booking work?").booking).toBeNull();
+  });
+
+  it("picks the event type out of the message", () => {
+    expect(eventTypeIn("a dj for our brand launch")).toBe("Brand launch");
+    expect(eventTypeIn("sangeet night")).toBe("Sangeet");
+    expect(eventTypeIn("a singer please")).toBeNull();
   });
 });

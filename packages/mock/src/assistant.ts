@@ -1,4 +1,4 @@
-import { DEFAULT_ASSISTANT_MODEL, OFF_TOPIC_REPLY, type AssistantChatInput, type AssistantReply, type AssistantSettings, type AssistantSettingsInput, type AssistantStatus, type AssistantTalent, type TalentSummary } from "@repo/schemas";
+import { ASKS_HOW, DEFAULT_ASSISTANT_MODEL, HOW_BOOKING_WORKS, OFF_TOPIC_REPLY, ON_TOPIC, WANTS_BOOKING, dateIn, eventTypeIn, type AssistantChatInput, type AssistantReply, type AssistantSettings, type AssistantSettingsInput, type AssistantStatus, type AssistantTalent, type TalentSummary } from "@repo/schemas";
 import { formatINRCompact, toIstDateKey } from "@repo/utils";
 import { CATEGORIES, CITIES, TALENTS } from "./catalogue/data";
 import { searchTalents, toSummary } from "./catalogue/query";
@@ -8,17 +8,17 @@ import { audit } from "./staff";
 import type { MockDb } from "./types";
 
 // The website assistant in demo mode. No Grok here: a browser must never hold the key, so only its last characters
-// are kept, and simple matching stands in for the model. Mirrors the rules in apps/api/src/assistant.
+// are kept, and simple matching stands in for the model. Mirrors apps/api/src/assistant/assistant.basic.ts.
+
+export { dateIn };
 
 const SHOWN = 4;
-const ON_TOPIC = /\b(hi|hello|hey|namaste|book|booking|talent|artist|singer|band|dj|comedian|anchor|event|wedding|party|sangeet|corporate|free|available|availability|date|fee|price|cost|budget|quote|suggest|recommend|find|how)\b/;
-const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
 function requireAdmin(actor: StaffUser) {
   if (!actor.roles.includes("SUPER_ADMIN")) throw new ApiError("FORBIDDEN", "Your role can't do that");
 }
 
-export const assistantStatus = (db: MockDb): AssistantStatus => ({ available: db.assistant?.enabled ?? true });
+export const assistantStatus = (db: MockDb): AssistantStatus => ({ ai: db.assistant?.enabled ?? false });
 
 export function assistantSettings(db: MockDb, actor: StaffUser): AssistantSettings {
   requireAdmin(actor);
@@ -49,20 +49,6 @@ export function removeAssistantKey(db: MockDb, actor: StaffUser) {
   return { ok: true };
 }
 
-/** "2026-11-03", "3 nov", "3rd november 2026" or "nov 3": the next time that date comes round. */
-export function dateIn(text: string, today: string) {
-  const iso = /\b(\d{4}-\d{2}-\d{2})\b/.exec(text)?.[1];
-  if (iso) return iso;
-  const months = "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*";
-  const found = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+${months}(?:\\s+(\\d{4}))?`).exec(text) ?? new RegExp(`\\b${months}\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+(\\d{4}))?`).exec(text);
-  if (!found) return null;
-  const [day, month] = /\d/.test(found[1]!) ? [found[1]!, found[2]!] : [found[2]!, found[1]!];
-  const build = (year: string | number) => `${year}-${String(MONTHS.indexOf(month) + 1).padStart(2, "0")}-${day.padStart(2, "0")}`;
-  if (found[3]) return build(found[3]);
-  const thisYear = Number(today.slice(0, 4));
-  return build(thisYear) >= today ? build(thisYear) : build(thisYear + 1);
-}
-
 const fee = (t: TalentSummary) => {
   const [min, max] = [t.feeBandMinPaise, t.feeBandMaxPaise];
   return min && max ? `${formatINRCompact(BigInt(min))} – ${formatINRCompact(BigInt(max))}` : "Fee on request";
@@ -76,7 +62,6 @@ const statusOn = (db: MockDb, slug: string, date: string): NonNullable<Assistant
 };
 
 export function assistantChat(db: MockDb, input: AssistantChatInput): AssistantReply {
-  if (!assistantStatus(db).available) throw new ApiError("ASSISTANT_UNAVAILABLE", "The assistant can't answer right now. Please try again, or browse talent directly.");
   const text = input.messages.at(-1)!.content.toLowerCase();
   const today = toIstDateKey(new Date());
   const date = dateIn(text, today);
@@ -84,10 +69,18 @@ export function assistantChat(db: MockDb, input: AssistantChatInput): AssistantR
   const named = everyone.find((t) => text.includes(t.stageName.toLowerCase()) || text.split(/\W+/).includes(t.stageName.toLowerCase().split(" ")[0]!));
   const category = CATEGORIES.find((c) => text.includes(c.name.toLowerCase()) || text.includes(c.slug.replace(/s$/, "")));
   const city = CITIES.find((c) => text.includes(c.name.toLowerCase()));
-  const reply = (words: string, talents: AssistantTalent[] = []): AssistantReply => ({ reply: words, talents, date, declined: false });
+  const eventType = eventTypeIn(text);
+  const wantsBooking = WANTS_BOOKING.test(text) && !ASKS_HOW.test(text);
+  const reply = (words: string, talents: AssistantTalent[] = []): AssistantReply => {
+    if (!wantsBooking) return { reply: words, talents, date, declined: false, booking: null };
+    const picked = talents.filter((t) => t.slug === named?.slug && t.status !== "booked" && t.status !== "unavailable");
+    const booking = { talentSlugs: picked.map((t) => t.slug), date, city: city?.name ?? null, eventType, budgetBand: null };
+    return { reply: `${words} I've started a brief below: check it and send it to our team.`, talents, date, declined: false, booking };
+  };
 
-  if (!named && !category && !city && !date && !ON_TOPIC.test(text)) return { reply: OFF_TOPIC_REPLY, talents: [], date: null, declined: true };
-  if (date && date < today) return reply("That date has passed. Which date is your event?");
+  if (!named && !category && !city && !date && !eventType && !ON_TOPIC.test(text)) return { reply: OFF_TOPIC_REPLY, talents: [], date: null, declined: true, booking: null };
+  if (date && date < today) return { reply: "That date has passed. Which date is your event?", talents: [], date: null, declined: false, booking: null };
+  if (ASKS_HOW.test(text) && !named) return reply(HOW_BOOKING_WORKS);
 
   if (named && date) {
     const status = statusOn(db, named.slug, date);
@@ -96,9 +89,11 @@ export function assistantChat(db: MockDb, input: AssistantChatInput): AssistantR
     return reply(`${named.stageName} is ${status === "booked" ? "already booked" : "not available"} on ${readableDate(date)}.${others.length ? " These similar artists are free that day." : ""}`, [card(named, status), ...others.map((t) => card(t, "free"))]);
   }
   if (named) return reply(`Tell me your date and I'll check whether ${named.stageName} is free.`, [card(named)]);
-  if (category || city || date) {
+  if (category || city || date || eventType) {
     const found = searchTalents({ category: category?.slug, city: city?.name }).data.filter((t) => !date || !isBlocked(db, t.slug, date)).slice(0, SHOWN);
-    return reply(found.length ? `Here are some artists${date ? ` free on ${readableDate(date)}` : ""}.` : "Nobody matches that yet. Try another city or category.", found.map((t) => card(t, date ? "free" : null)));
+    const which = [category?.name.toLowerCase() ?? "artists", city && `for events in ${city.name}`, date && `free on ${readableDate(date)}`].filter(Boolean).join(" ");
+    return reply(found.length ? `Here are some ${which}. Tap Add to put them in your brief.` : `I couldn't find ${which}. Try another city or category.`, found.map((t) => card(t, date ? "free" : null)));
   }
-  return reply("I can find artists for your event and check who's free on your date. What are you planning?");
+  if (wantsBooking) return reply("Happy to help you book.");
+  return reply("I can find artists for your event, check who's free on your date and start your booking. What are you planning?");
 }

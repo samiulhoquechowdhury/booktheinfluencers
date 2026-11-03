@@ -1,4 +1,4 @@
-import type { AssistantTalent } from "@repo/schemas";
+import { EVENT_TYPES, type AssistantBooking, type AssistantTalent } from "@repo/schemas";
 import { formatINRCompact, toIstDateKey } from "@repo/utils";
 import { BUDGETS, talentInclude, talentWhere, type TalentRow } from "../catalogue/catalogue.controller";
 import { LISTED } from "../catalogue/listed";
@@ -10,6 +10,8 @@ import type { GrokTool } from "./grok";
 
 const SHOWN = 4;
 const FAR_AHEAD_DAYS = 365 * 3;
+
+const ARTISTS_PER_BRIEF = 5;
 
 export const REPLY_TOOL = "reply_to_customer";
 export const DECLINE_TOOL = "decline_off_topic";
@@ -59,6 +61,22 @@ export function toolDefinitions(categories: string[]): GrokTool[] {
     },
     {
       type: "function",
+      name: "start_booking",
+      description: "Open a booking brief in the chat, filled in with what the customer has told you. Use when they want to book, hire or get a quote. They add their contact details and send it themselves.",
+      parameters: {
+        type: "object",
+        properties: {
+          artists: { type: "array", items: string("An artist's name"), maxItems: ARTISTS_PER_BRIEF },
+          date: date("Event date, YYYY-MM-DD"),
+          city: string("City of the event"),
+          event_type: { type: "string", enum: [...EVENT_TYPES] },
+          budget: { type: "string", enum: Object.keys(BUDGETS), description: "Fee band in rupees: l means lakh" },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
       name: REPLY_TOOL,
       description: "Send your answer to the customer. Use for every reply about finding or booking talent, including greetings and how booking works.",
       parameters: {
@@ -89,12 +107,14 @@ Every turn you must call a tool:
 
 How booking works: the customer sends a free brief through the website, with no commitment. Our team confirms with the artist and sends an itemised quote. The customer accepts it, signs the contract and pays the advance, and only then is the date theirs. Whoever confirms first gets the date.
 
-So "free" means the date isn't blocked today, not that it's reserved. Don't promise a booking. You can't book for anyone: the customer uses the Book button on an artist's card, which you never need to link to.
+So "free" means the date isn't blocked today, not that it's reserved. Don't promise a booking.
+
+When the customer wants to book, hire or get a quote, call start_booking with whatever you know (artists, date, city, event type, budget), then tell them the brief is ready below to check and send. They fill in their name and phone there, so never ask for contact details in the chat. You can't confirm a booking yourself.
 
 Keep replies short and warm, two or three sentences. Plain text only, no links. Reply in the customer's language.`;
 }
 
-export type ToolResult = { forModel: unknown; talents?: AssistantTalent[]; date?: string };
+export type ToolResult = { forModel: unknown; talents?: AssistantTalent[]; date?: string; booking?: AssistantBooking };
 
 const addDays = (key: string, days: number) => new Date(Date.parse(`${key}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
@@ -193,6 +213,46 @@ async function listFreeDates(prisma: PrismaService, args: Record<string, unknown
   return { forModel: { artist: found.talent.stageName, nextFreeDates: firstFree(blocked, checked.date, 8) }, talents: [card(found.talent)] };
 }
 
+const plain = (value: unknown, max = 80) => (typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null);
+
+/** Artists already blocked on the date are left out of the brief, and the model is told so. */
+async function startBooking(prisma: PrismaService, args: Record<string, unknown>, today: string): Promise<ToolResult> {
+  const checked = args.date === undefined ? null : checkedDate(args.date, today);
+  if (checked?.problem) return { forModel: { problem: checked.problem } };
+  const on = checked?.date ?? null;
+  const names = Array.isArray(args.artists) ? args.artists.slice(0, ARTISTS_PER_BRIEF) : [];
+  const found = await Promise.all(names.map((name) => findArtist(prisma, name)));
+  const artists = found.flatMap((f) => (f.talent ? [f.talent] : []));
+  const blocked = on ? await blockedOn(prisma, artists, on) : new Map<string, AssistantTalent["status"]>();
+  const talents = artists.map((t) => card(t, on ? (blocked.get(t.id) ?? "free") : null));
+  const free = talents.filter((t) => t.status !== "booked" && t.status !== "unavailable");
+  const budget = plain(args.budget);
+  const booking: AssistantBooking = {
+    talentSlugs: free.map((t) => t.slug),
+    date: on,
+    city: plain(args.city, 60),
+    eventType: EVENT_TYPES.find((type) => type === args.event_type) ?? null,
+    budgetBand: budget && budget in BUDGETS ? budget : null,
+  };
+  return {
+    forModel: {
+      ready: true,
+      artistsAdded: free.map((t) => t.name),
+      notFreeSoLeftOut: talents.filter((t) => !free.includes(t)).map((t) => t.name),
+      notFound: names.filter((_, i) => !found[i]!.talent).map(String),
+      note: "The customer now sees the brief below your reply. Ask them to check it and send it.",
+    },
+    talents,
+    date: on ?? undefined,
+    booking,
+  };
+}
+
+async function blockedOn(prisma: PrismaService, artists: TalentRow[], date: string) {
+  const rows = await prisma.db.blackout.findMany({ where: { date, talentId: { in: artists.map((t) => t.id) } }, select: { talentId: true, bookingId: true } });
+  return new Map(rows.map((r) => [r.talentId, r.bookingId ? ("booked" as const) : ("unavailable" as const)]));
+}
+
 export function runTool(prisma: PrismaService, name: string, rawArguments: string): Promise<ToolResult> {
   const today = toIstDateKey(new Date());
   let args: Record<string, unknown> = {};
@@ -204,5 +264,6 @@ export function runTool(prisma: PrismaService, name: string, rawArguments: strin
   if (name === "search_talents") return searchTalents(prisma, args, today);
   if (name === "check_availability") return checkAvailability(prisma, args, today);
   if (name === "list_free_dates") return listFreeDates(prisma, args, today);
+  if (name === "start_booking") return startBooking(prisma, args, today);
   return Promise.resolve({ forModel: { problem: "Unknown tool." } });
 }

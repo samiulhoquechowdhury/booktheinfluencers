@@ -70,9 +70,24 @@ describe("website assistant", () => {
     await ctx.db.assistantConfig.deleteMany();
   });
 
-  it("stays off the website until a key is saved", async () => {
-    expect((await ctx.http().get("/v1/assistant/status").expect(200)).body).toEqual({ available: false });
-    await chat("hello").expect(503);
+  it("answers with built-in matching until a key is saved", async () => {
+    expect((await ctx.http().get("/v1/assistant/status").expect(200)).body).toEqual({ ai: false });
+    expect((await chat("hello").expect(200)).body).toMatchObject({ declined: false, booking: null });
+    expect((await chat("what is the capital of france").expect(200)).body).toMatchObject({ reply: OFF_TOPIC_REPLY, declined: true });
+    expect(seen).toHaveLength(0);
+  });
+
+  it("checks dates and starts a brief without Grok", async () => {
+    const date = inDays(42);
+    const free = (await chat(`book meera iyer for my wedding on ${date}`, "10.0.3.1").expect(200)).body;
+    expect(free.talents[0]).toMatchObject({ slug: "meera-iyer", status: "free" });
+    expect(free.booking).toEqual({ talentSlugs: ["meera-iyer"], date, city: null, eventType: "Wedding", budgetBand: null });
+
+    await ctx.db.blackout.create({ data: { talentId, date, note: "assistant test" } });
+    const taken = (await chat(`is meera iyer free on ${date}?`, "10.0.3.1").expect(200)).body;
+    expect(taken.reply).toMatch(/not available/);
+    expect(taken.talents[0]).toMatchObject({ slug: "meera-iyer", status: "unavailable" });
+    expect(taken.booking).toBeNull();
     expect(seen).toHaveLength(0);
   });
 
@@ -91,7 +106,7 @@ describe("website assistant", () => {
     const row = await ctx.db.assistantConfig.findUniqueOrThrow({ where: { id: "grok" } });
     expect(Buffer.from(row.sealedKey).toString("latin1")).not.toContain(KEY);
     expect(seen[0]!.headers.authorization).toBe(`Bearer ${KEY}`);
-    expect((await ctx.http().get("/v1/assistant/status").expect(200)).body).toEqual({ available: true });
+    expect((await ctx.http().get("/v1/assistant/status").expect(200)).body).toEqual({ ai: true });
     const audit = await ctx.db.auditLog.findFirstOrThrow({ where: { entity: "AssistantConfig" }, orderBy: { createdAt: "desc" } });
     expect(JSON.stringify(audit)).not.toContain(KEY);
 
@@ -116,7 +131,9 @@ describe("website assistant", () => {
     await connect({ apiKey: KEY, model: "grok-4.7", enabled: true }).expect(200);
     await ctx.http().post("/v1/admin/assistant/test").set("authorization", `Bearer ${admin}`).expect(200);
     await connect({ model: "grok-4.7", enabled: false }).expect(200);
-    await chat("hi").expect(503);
+    const asked = seen.length;
+    await chat("hi").expect(200);
+    expect(seen).toHaveLength(asked);
     await ctx.http().delete("/v1/admin/assistant").set("authorization", `Bearer ${admin}`).expect(200);
     expect((await ctx.http().get("/v1/admin/assistant").set("authorization", `Bearer ${admin}`).expect(200)).body.configured).toBe(false);
   });
@@ -197,20 +214,37 @@ describe("website assistant", () => {
       expect(seen[1]!.body.input[0].output).not.toMatch(/phone|email|userId|reviewStatus|bookingId/i);
     });
 
-    it("hides Grok's failures from customers", async () => {
+    it("answers with built-in matching when Grok fails, without showing why", async () => {
       turns = [{ status: 500, body: '{"error":"secret upstream detail"}' }];
-      const { body } = await chat("hi", "10.0.1.10").expect(503);
+      const { body } = await chat("hi", "10.0.1.10").expect(200);
+      expect(body.declined).toBe(false);
       expect(JSON.stringify(body)).not.toContain("upstream");
     });
 
-    it("limits each visitor", async () => {
+    it("lets Grok start a brief, leaving out artists who aren't free", async () => {
+      const date = inDays(43);
+      turns = [{ calls: [{ name: "start_booking", args: { artists: ["Meera Iyer", "Nobody Atall"], date, city: "Mumbai", event_type: "Wedding", budget: "1l-3l" } }] }, reply("Your brief is ready below.")];
+      const { body } = await chat("book meera for my wedding", "10.0.1.11").expect(200);
+      expect(body.booking).toEqual({ talentSlugs: ["meera-iyer"], date, city: "Mumbai", eventType: "Wedding", budgetBand: "1l-3l" });
+      expect(JSON.parse(seen[1]!.body.input[0].output)).toMatchObject({ artistsAdded: ["Meera Iyer"], notFound: ["Nobody Atall"] });
+
+      await ctx.db.blackout.create({ data: { talentId, date, note: "assistant test" } });
+      turns = [{ calls: [{ name: "start_booking", args: { artists: ["Meera Iyer"], date, event_type: "Rave" } }] }, reply("Ready.")];
+      const taken = (await chat("book meera", "10.0.1.12").expect(200)).body;
+      expect(taken.booking).toMatchObject({ talentSlugs: [], eventType: null });
+      expect(taken.talents[0]).toMatchObject({ slug: "meera-iyer", status: "unavailable" });
+    });
+
+    it("limits how much Grok each visitor uses, then answers without it", async () => {
       for (let i = 0; i < 20; i++) {
         turns = [reply("Hello")];
         await chat("hi", "10.0.2.1").expect(200);
       }
-      await chat("hi", "10.0.2.1").expect(429);
+      const asked = seen.length;
+      expect((await chat("hi", "10.0.2.1").expect(200)).body.reply).not.toBe("Hello");
+      expect(seen).toHaveLength(asked);
       turns = [reply("Hello")];
-      await chat("hi", "10.0.2.2").expect(200);
+      expect((await chat("hi", "10.0.2.2").expect(200)).body.reply).toBe("Hello");
     });
 
     it("rejects oversized messages before they reach Grok", async () => {

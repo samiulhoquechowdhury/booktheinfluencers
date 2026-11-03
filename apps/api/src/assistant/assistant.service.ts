@@ -7,6 +7,7 @@ import { iso } from "../common/validate";
 import { env } from "../config/env";
 import { PrismaService } from "../prisma/prisma.service";
 import { decrypt, encrypt } from "../talent/document-vault";
+import { basicChat } from "./assistant.basic";
 import { DECLINE_TOOL, REPLY_TOOL, runTool, systemPrompt, toolDefinitions, type ToolResult } from "./assistant.tools";
 import { GrokError, messageText, respond, toolCalls, type GrokFailure, type GrokInput } from "./grok";
 
@@ -16,12 +17,10 @@ const AAD = "assistant-grok-key";
 const MAX_ROUNDS = 5;
 const REPLY_MAX = 1200;
 
-/** Every message spends money on the saved key, and the chat is open to anyone. */
+/** Every Grok message spends money on the saved key, and the chat is open to anyone. Past these, the built-in answers take over. */
 const PER_VISITOR = { limit: 20, windowMs: 10 * 60_000 };
 const SITE_WIDE = { limit: 600, windowMs: 60 * 60_000 };
 
-const BUSY = () => new DomainError("ASSISTANT_BUSY", "You're sending messages quickly. Please wait a few minutes and try again.", 429);
-const UNAVAILABLE = () => new DomainError("ASSISTANT_UNAVAILABLE", "The assistant can't answer right now. Please try again, or browse talent directly.", 503);
 
 const WHY: Record<GrokFailure, string> = {
   key: "Grok rejected this API key. Check it and try again.",
@@ -63,7 +62,7 @@ export class AssistantService {
   }
 
   async status(): Promise<AssistantStatus> {
-    return { available: Boolean((await this.config())?.enabled) };
+    return { ai: Boolean((await this.config())?.enabled) };
   }
 
   async settings(): Promise<AssistantSettings> {
@@ -132,66 +131,77 @@ export class AssistantService {
     return { ok: true };
   }
 
+  /** False once this visitor, or the whole site, has used its share of Grok for now. */
   private admit(visitor: string) {
     const now = Date.now();
     if (now >= this.siteWide.resetAt) this.siteWide = { count: 0, resetAt: now + SITE_WIDE.windowMs };
     if (this.visitors.size > 20_000) this.visitors.clear();
     const mine = this.visitors.get(visitor);
     const entry = mine && now < mine.resetAt ? mine : { count: 0, resetAt: now + PER_VISITOR.windowMs };
-    if (entry.count >= PER_VISITOR.limit || this.siteWide.count >= SITE_WIDE.limit) throw BUSY();
+    if (entry.count >= PER_VISITOR.limit || this.siteWide.count >= SITE_WIDE.limit) return false;
     entry.count += 1;
     this.siteWide.count += 1;
     this.visitors.set(visitor, entry);
+    return true;
+  }
+
+  /** Grok answers when it's switched on. Without it, or when it fails, the built-in answers do, so the chat always works. */
+  async chat(input: AssistantChatInput, visitor: string): Promise<AssistantReply> {
+    const row = await this.config();
+    if (!row?.enabled || !this.admit(visitor)) return basicChat(this.prisma, input);
+    let key: string;
+    try {
+      key = openKey(row.sealedKey);
+    } catch {
+      this.logger.error("The saved Grok key can't be decrypted");
+      return basicChat(this.prisma, input);
+    }
+    try {
+      return await this.grokChat(key, row.model, input);
+    } catch (error) {
+      this.logger.warn(error instanceof GrokError ? `Grok failed: ${error.reason}` : `Assistant failed: ${String(error)}`);
+      return basicChat(this.prisma, input);
+    }
   }
 
   /**
    * Grok has to call a tool every turn, and a turn only ends with reply_to_customer or decline_off_topic. So a question
    * that isn't about booking gets our fixed words, not whatever the model might write. Cards come from tool results.
    */
-  async chat(input: AssistantChatInput, visitor: string): Promise<AssistantReply> {
-    const row = await this.config();
-    if (!row?.enabled) throw UNAVAILABLE();
-    this.admit(visitor);
-    let key: string;
-    try {
-      key = openKey(row.sealedKey);
-    } catch {
-      this.logger.error("The saved Grok key can't be decrypted");
-      throw UNAVAILABLE();
-    }
+  private async grokChat(key: string, model: string, input: AssistantChatInput): Promise<AssistantReply> {
 
     const categories = await this.prisma.db.category.findMany({ select: { slug: true } });
     const tools = toolDefinitions(categories.map((c) => c.slug));
     let request: GrokInput[] = [{ role: "system", content: systemPrompt(toIstDateKey(new Date())) }, ...input.messages];
     let previous: string | undefined;
     let found: ToolResult | null = null;
-    const finish = (reply: string, declined = false): AssistantReply => ({ reply, talents: declined ? [] : (found?.talents ?? []), date: declined ? null : (found?.date ?? null), declined });
+    let booking: AssistantReply["booking"] = null;
+    const finish = (reply: string, declined = false): AssistantReply =>
+      declined ? { reply, talents: [], date: null, declined, booking: null } : { reply, talents: found?.talents ?? [], date: found?.date ?? booking?.date ?? null, declined, booking };
 
-    try {
-      for (let round = 0; round < MAX_ROUNDS; round++) {
-        const response = await respond(key, { model: row.model, input: request, tools, tool_choice: "required", previous_response_id: previous });
-        const calls = toolCalls(response);
-        if (calls.some((c) => c.name === DECLINE_TOOL)) return finish(OFF_TOPIC_REPLY, true);
-        const answer = calls.find((c) => c.name === REPLY_TOOL);
-        if (answer) {
-          const { text } = JSON.parse(answer.arguments) as { text?: unknown };
-          const reply = typeof text === "string" ? cleanReply(text) : "";
-          if (reply) return finish(reply);
-        }
-        // A model that ignores tool_choice can't be trusted to have stayed on topic.
-        if (calls.length === 0) return finish(found ? cleanReply(messageText(response)) || "Here's what I found." : OFF_TOPIC_REPLY, !found);
-
-        const results = await Promise.all(calls.map((c) => runTool(this.prisma, c.name, c.arguments).then((result) => ({ call: c, result }))));
-        for (const { result } of results) if (result.talents) found = result;
-        request = results.map(({ call, result }) => ({ type: "function_call_output", call_id: call.call_id, output: JSON.stringify(result.forModel) }));
-        previous = response.id;
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      const response = await respond(key, { model, input: request, tools, tool_choice: "required", previous_response_id: previous });
+      const calls = toolCalls(response);
+      if (calls.some((c) => c.name === DECLINE_TOOL)) return finish(OFF_TOPIC_REPLY, true);
+      const answer = calls.find((c) => c.name === REPLY_TOOL);
+      if (answer) {
+        const { text } = JSON.parse(answer.arguments) as { text?: unknown };
+        const reply = typeof text === "string" ? cleanReply(text) : "";
+        if (reply) return finish(reply);
       }
-    } catch (error) {
-      if (error instanceof DomainError) throw error;
-      this.logger.warn(error instanceof GrokError ? `Grok failed: ${error.reason}` : `Assistant failed: ${String(error)}`);
-      throw UNAVAILABLE();
+      // A model that ignores tool_choice can't be trusted to have stayed on topic.
+      if (calls.length === 0) return finish(found || booking ? cleanReply(messageText(response)) || "Here's what I found." : OFF_TOPIC_REPLY, !found && !booking);
+
+      const results = await Promise.all(calls.map((c) => runTool(this.prisma, c.name, c.arguments).then((result) => ({ call: c, result }))));
+      for (const { result } of results) {
+        if (result.talents) found = result;
+        if (result.booking) booking = result.booking;
+      }
+      request = results.map(({ call, result }) => ({ type: "function_call_output", call_id: call.call_id, output: JSON.stringify(result.forModel) }));
+      previous = response.id;
     }
+    if (booking) return finish("Your brief is ready below. Check it and send it to our team.");
     if (found) return finish("Here's what I found.");
-    throw UNAVAILABLE();
+    throw new Error("Grok didn't finish its answer");
   }
 }

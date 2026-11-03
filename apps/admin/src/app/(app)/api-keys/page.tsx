@@ -44,7 +44,7 @@ function GrokCard({ saved }: { saved: AssistantSettings }) {
       actions={<Pill tone={tone}>{saved.enabled ? "On" : saved.configured ? "Off" : "Not connected"}</Pill>}
     >
       <p className="text-sm text-muted">
-        Helps visitors find artists, check dates and get alternatives. Create a key at console.x.ai. The chat appears on the website as soon as a working key is saved.
+        The chat button is always on the website: visitors find artists, check dates and send a brief from it. With Grok on, it understands questions in any wording. Without a key, or if Grok fails or runs out of credit, simple built-in matching answers instead. Create a key at console.x.ai.
       </p>
       {!USING_API && <p className="mt-3 rounded-md bg-cream px-3 py-2 text-sm text-ink-soft">Demo mode: only the last 4 characters are kept, Grok isn't called, and simple matching answers the chat.</p>}
 
@@ -117,7 +117,7 @@ function GrokCard({ saved }: { saved: AssistantSettings }) {
 
       {confirming && (
         <Modal title="Remove the Grok key?" onClose={() => setConfirming(false)}>
-          <p className="text-sm text-ink-soft">The chat disappears from the website straight away. You'll need to enter a key again to bring it back.</p>
+          <p className="text-sm text-ink-soft">The website chat switches to simple built-in answers straight away. You'll need to enter a key again to bring Grok back.</p>
           <div className="mt-5 flex justify-end gap-2">
             <button type="button" onClick={() => setConfirming(false)} className={`${button} border border-line bg-white text-ink hover:bg-cream`}>Cancel</button>
             <button

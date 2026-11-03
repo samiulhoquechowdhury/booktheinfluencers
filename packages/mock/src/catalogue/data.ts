@@ -52,16 +52,7 @@ export const CITIES = [
   { slug: "guwahati", name: "Guwahati" },
 ] as const;
 
-export const EVENT_TYPES = [
-  "Corporate event",
-  "Wedding",
-  "Sangeet",
-  "College festival",
-  "Private party",
-  "Brand launch",
-  "Conference",
-  "Award night",
-] as const;
+export { EVENT_TYPES } from "@repo/schemas";
 
 export const LANGUAGES = [
   "Hindi",
